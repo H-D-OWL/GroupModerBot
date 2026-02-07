@@ -37,5 +37,8 @@
 *.out
 *.app
 
+# Visual Studio files 
+.vs
+
 # debug information files
 *.dwo
