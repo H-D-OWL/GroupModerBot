@@ -17,5 +17,5 @@ namespace logging
 		Error
 	};
 
-	void Log(const vector<LogPrefix>& logPrefixs, const string_view& log);
+	void Log(const vector<LogPrefix>& logPrefixs, const string_view log);
 }

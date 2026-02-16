@@ -21,9 +21,15 @@
     <ClCompile Include="logging.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="botControl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="logging.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="botControl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

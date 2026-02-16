@@ -15,7 +15,7 @@ namespace logging
 		}
 	}
 
-	void Log(const vector<LogPrefix>& logPrefixs, const string_view& log = "")
+	void Log(const vector<LogPrefix>& logPrefixs, const string_view log = "")
 	{
 		for (const auto& lp : logPrefixs)
 			clog << LogPrefixToText(lp) << ' ';
