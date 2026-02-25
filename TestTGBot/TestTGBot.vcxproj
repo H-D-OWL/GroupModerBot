@@ -139,12 +139,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="botControl.cpp" />
+    <ClCompile Include="BotController.cpp" />
+    <ClCompile Include="BotDatabase.cpp" />
     <ClCompile Include="logging.cpp" />
     <ClCompile Include="TestTGBot.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="botControl.h" />
+    <ClInclude Include="BotController.h" />
+    <ClInclude Include="BotDatabase.h" />
     <ClInclude Include="logging.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

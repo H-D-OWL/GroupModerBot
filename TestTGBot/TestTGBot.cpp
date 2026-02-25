@@ -10,7 +10,8 @@
 #include <random>
 #include "logging.h"
 #include <chrono>
-#include "botControl.h"
+#include "BotDatabase.h"
+#include "BotController.h"
 
 /*
 	1. Получение токина и пути к базе данных из файла DataForBot.txt.
@@ -18,7 +19,7 @@
 	3. Выдача кода подтверждения для подтверждения прав первого администратора бота.
 	4. Настройка бота через личную группу в телеграме.
 	5. Использование команд в группе (бан, мьют, отключение возможности песать и другие).
-
+	database
 
 */
 
@@ -30,24 +31,6 @@
 using namespace std;
 using namespace TgBot;
 using namespace logging;
-using namespace botControl;
-
-bool TableHasColumn(const SQLite::Database& dataBase, const string& tableName, const string& columnName)
-{
-	SQLite::Statement query(dataBase, "PRAGMA table_info(" + tableName + ")");
-
-	while (query.executeStep())
-		if (query.getColumn(1).getText() == columnName)
-			return true;
-
-	return false;
-}
-
-bool isTableEmpty(const SQLite::Database& dataBase, const string& tableName)
-{
-	SQLite::Statement query(dataBase, "SELECT 1 FROM " + tableName + " LIMIT 1");
-	return !query.executeStep();
-}
 
 void SendManagerUI(const Bot& bot, const int64_t chatId)
 {
@@ -98,11 +81,6 @@ bool isSystemMessage(const TgBot::Message::Ptr& message)
 		);
 }
 
-auto test(auto a)
-{
-	return a;
-}
-
 struct Table
 {
 	const string tableName{};
@@ -128,23 +106,20 @@ int main()
 
 	Log({ LogPrefix::Program, LogPrefix::Event }, "file \"DataForBot.txt\" found");
 
-	string  pathToDatabase{ "ERROR" }, botToken{ "ERROR" };
+	string dbPath{ "ERROR" }, botToken{ "ERROR" };
 
-	for (int i = 0; fileDataForBot.good() && i < 2; ++i)
+	while(fileDataForBot.good())
 	{
 		string fileLine{};
 		getline(fileDataForBot, fileLine);
 
-		switch (i)
+		if (const auto off = fileLine.find("DBPath="); off != string::npos)
 		{
-		case 0:
-			if (!fileLine.empty())
-				pathToDatabase = fileLine;
-			break;
-		case 1:
-			if (!fileLine.empty())
-				botToken = fileLine;
-			break;
+			dbPath = fileLine.substr(off + 9);
+		}
+		else if (const auto off = fileLine.find("BotToken="); off != string::npos)
+		{
+			botToken = fileLine.substr(off + 9);
 		}
 	}
 
@@ -154,42 +129,21 @@ int main()
 	//Работа с ДБ
 	// ============================================================
 
-	unique_ptr<SQLite::Database> dataBase;
+
+	BotDatabase botDatabase;
 	string confirmationCode{ "ERROR" };
-
-	Table BotAdministrators{ "BotAdministrators", {"AdministratorId", "AdministratorName", "IsOwner"} };
-	Table Groups{ "Groups", {"GroupId", "GroupName", "BotIsAdministrator"} };
-
-	const vector<pair<string, const vector<string>>> tableAndcolumnNames{
-		{BotAdministrators.tableName, BotAdministrators.columnNames},
-		{Groups.tableName, Groups.columnNames},
-	};
 
 	try
 	{
-		dataBase = make_unique<SQLite::Database>(pathToDatabase, SQLite::OPEN_READWRITE);
+		botDatabase.Open(dbPath);
 
-		Log({ LogPrefix::Database, LogPrefix::Event }, "batabase: " + pathToDatabase.substr(pathToDatabase.rfind('\\') + 1) + " found");
+		Log({ LogPrefix::Database, LogPrefix::Event }, "batabase: " + dbPath.substr(dbPath.rfind('\\') + 1) + " found");
 
-		for (const auto& data : tableAndcolumnNames)
-		{
-			if (dataBase->tableExists(data.first))
-			{
-				for (const auto& column : data.second)
-				{
-					if (!TableHasColumn(*dataBase, data.first, column))
-					{
-						throw SQLite::Exception("table " + data.first + " has no column named " + column);
-					}
-				}
-			}
-			else
-			{
-				throw SQLite::Exception("no such table: " + data.first);
-			}
-		}
+		botDatabase.CheckStructure();
 
-		if (isTableEmpty(*dataBase, BotAdministrators.tableName))
+		botDatabase.CacheReload();
+
+		if(botDatabase.GetAdminIds().empty())
 		{
 			confirmationCode.clear();
 
@@ -204,11 +158,10 @@ int main()
 		return 2;
 	}
 
-
 	// ============================================================
 	//Работа с ботом
 	// ============================================================
-
+	//botToken = "8231301649:AAEtgMiY1ukuwycs5RWus5IDVfQbrHv7BKo";
 	Bot bot(botToken);
 
 	if (bot.getToken().empty())
@@ -219,49 +172,11 @@ int main()
 
 	Log({ LogPrefix::Bot, LogPrefix::Event }, "botToken is valid");
 
-	/*//BotCommand::Ptr t(new BotCommand);
-	//t->command = "/swap";
-	//t->description = "Swap data";
-	//cout << bot.getApi().setMyCommands({t}) << '\n';
-
-	//// 1. Создаем команду
-	//BotCommand::Ptr swapCommand(new BotCommand);
-	//swapCommand->command = "/swap";
-	//swapCommand->description = "Swap data";
-
-	//// 2. Создаем вторую команду для примера
-	//BotCommand::Ptr startCommand(new BotCommand);
-	//startCommand->command = "/start";
-	//startCommand->description = "Start the bot";
-
-	//// 3. Помещаем команды в ВЕКТОР, который ожидает метод [citation:4]
-	//std::vector<BotCommand::Ptr> commands;
-	//commands.push_back(swapCommand);
-	//commands.push_back(startCommand);
-
-	//// 4. Вызываем метод и проверяем результат
-	//bool success = bot.getApi().setMyCommands(commands);
-	//if (success) {
-	//	std::cout << "Commands set successfully!" << std::endl;
-	//}
-	//else {
-	//	std::cerr << "Failed to set commands." << std::endl;
-	//}
-
-	//try
-	//{
-	//	auto chat = bot.getApi().getChat(6690609226);
-	//	Log({ LogPrefix::Bot, LogPrefix::Event }, chat->username + ' ' + chat->firstName + ' ' + chat->lastName);
-
-	//}
-	//catch (const TgBot::TgException& e) {
-	//	// Пользователь не найден или бот не имеет доступа
-
-	//}*/
-
 	// ============================================================
 	//Управление ботом
 	// ============================================================
+
+	BotController controller{ dbPath, botToken, botDatabase };
 
 	/*
 		/start
@@ -269,13 +184,18 @@ int main()
 		/deleteGroup
 		/groups
 		/ban
-		
+		/unban
+		/mute
+		/unmute
+		/help
+		/about
 
 	*/
 
-
-	bot.getEvents().onCommand("start", [&bot, &dataBase, &confirmationCode, &BotAdministrators](Message::Ptr message)
+	bot.getEvents().onCommand("start", [&bot, &botDatabase, &confirmationCode](Message::Ptr message)
 		{
+			Log({ LogPrefix::Database, LogPrefix::Error }, message->chat->firstName + ' ' + message->chat->lastName + ' ' + message->chat->title + ' ' + message->chat->username + ' ' + message->chat->bio);
+
 			if (message->chat->type == Chat::Type::Private)
 			{
 				string code = message->text.substr(message->text.size() == 6 ? 6 : 7);
@@ -284,19 +204,14 @@ int main()
 				{
 					try
 					{
-						SQLite::Statement query{ *dataBase, "INSERT INTO " + BotAdministrators.tableName + " (" + BotAdministrators.columnNames[0] + ',' + BotAdministrators.columnNames[1] + ',' + BotAdministrators.columnNames[2] + ") VALUES(? , ? , ? )" };
-
-						query.bind(1, message->from->id);
-						query.bind(2, message->from->firstName);
-						query.bind(3, true);
-						query.exec();
+						botDatabase.SetAdmin(message->from->id, message->from->firstName);
 
 						confirmationCode = "ERROR";
 
 						Log({ LogPrefix::Bot, LogPrefix::Event }, "user: " + to_string(message->from->id) + ' ' + message->from->firstName + ' ' + message->from->lastName + " entered the correct confirmation code and became a moderator");
+						bot.getApi().sendMessage(message->chat->id, "Вы стали модератором.");
 
-						//bot.getApi().sendMessage(message->chat->id, "Вы стали модератором.");
-						SendManagerUI(bot, message->chat->id);
+						//SendManagerUI(bot, message->chat->id);
 					}
 					catch (exception& e)
 					{
@@ -313,59 +228,15 @@ int main()
 			}
 		});
 
-	/*bot.getEvents().onCommand("commands", [&bot, &dataBase, &confirmationCode, &dataBasesAndColumnsNames](Message::Ptr message)
-		{
-			if (message->chat->type == Chat::Type::Private)
-			{
-				string code = message->text.substr(message->text.size() == 6 ? 6 : 7);
-
-				if (confirmationCode != "ERROR" && code == confirmationCode)
-				{
-					try
-					{
-						SQLite::Statement query{ *dataBase, "INSERT INTO " + BotAdministrators.tableName + " (" + BotAdministrators.columnNames[0] + ',' + BotAdministrators.columnNames[1] + ',' + BotAdministrators.columnNames[2] + ") VALUES(? , ? , ? )" };
-
-						query.bind(1, message->from->id);
-						query.bind(2, message->from->firstName);
-						query.bind(3, message->from->lastName);
-						query.exec();
-
-						confirmationCode = "ERROR";
-
-						Log({ LogPrefix::Bot, LogPrefix::Event }, "user: " + to_string(message->from->id) + ' ' + message->from->firstName + ' ' + message->from->lastName + " entered the correct confirmation code and became a moderator");
-
-						//bot.getApi().sendMessage(message->chat->id, "Вы стали модератором.");
-						SendManagerUI(bot, message->chat->id);
-					}
-					catch (exception& e)
-					{
-						Log({ LogPrefix::Database, LogPrefix::Error }, e.what());
-
-						bot.getApi().sendMessage(message->chat->id, "Произошла техническая ошибка. Вы не стали модератором.");
-					}
-				}
-				else if (confirmationCode != "ERROR" && !code.empty())
-				{
-					Log({ LogPrefix::Bot, LogPrefix::Error }, "user: " + to_string(message->from->id) + " entered an incorrect confirmation code and did not become a moderator");
-					bot.getApi().sendMessage(message->chat->id, "Код подтверждения неверен.");
-				}
-			}
-		});*/
-
-
-
 	string codeForAddingGroup{ "ERROR" };
 
-
-	bot.getEvents().onCommand("addGroup", [&bot, &dataBase, &codeForAddingGroup, &BotAdministrators, &Groups](Message::Ptr message)
+	bot.getEvents().onCommand("addGroup", [&bot, &botDatabase, &codeForAddingGroup](Message::Ptr message)
 		{
 			try
 			{
 				if (message->chat->type == Chat::Type::Private)
 				{
-					SQLite::Statement query{ *dataBase, "SELECT " + BotAdministrators.columnNames[0] + " FROM " + BotAdministrators.tableName + " WHERE " + BotAdministrators.columnNames[0] + '=' + to_string(message->from->id) };
-
-					if (query.executeStep())
+					if(botDatabase.GetAdminIds().find(message->from->id) != botDatabase.GetAdminIds().cend())
 					{
 						Log({ LogPrefix::Database, LogPrefix::Event }, "The user is the bot administrator");
 
@@ -379,40 +250,6 @@ int main()
 					{
 						Log({ LogPrefix::Database, LogPrefix::Error }, "The user is not the bot administrator");
 					}
-
-
-					/*string code = message->text.substr(message->text.size() == 6 ? 6 : 7);
-
-					if (confirmationCode != "ERROR" && code == confirmationCode)
-					{
-						try
-						{
-							SQLite::Statement query{ *dataBase, "INSERT INTO " + BotAdministrators.tableName + " (" + BotAdministrators.columnNames[0] + ',' + BotAdministrators.columnNames[1] + ',' + BotAdministrators.columnNames[2] + ") VALUES(? , ? , ? )" };
-
-							query.bind(1, message->from->id);
-							query.bind(2, message->from->firstName);
-							query.bind(3, message->from->lastName);
-							query.exec();
-
-							confirmationCode = "ERROR";
-
-							Log({ LogPrefix::Bot, LogPrefix::Event }, "user: " + to_string(message->from->id) + ' ' + message->from->firstName + ' ' + message->from->lastName + " entered the correct confirmation code and became a moderator");
-
-							//bot.getApi().sendMessage(message->chat->id, "Вы стали модератором.");
-							SendManagerUI(bot, message->chat->id);
-						}
-						catch (exception& e)
-						{
-							Log({ LogPrefix::Database, LogPrefix::Error }, e.what());
-
-							bot.getApi().sendMessage(message->chat->id, "Произошла техническая ошибка. Вы не стали модератором.");
-						}
-					}
-					else if (confirmationCode != "ERROR" && !code.empty())
-					{
-						Log({ LogPrefix::Bot, LogPrefix::Error }, "user: " + to_string(message->from->id) + " entered an incorrect confirmation code and did not become a moderator");
-						bot.getApi().sendMessage(message->chat->id, "Код подтверждения неверен.");
-					}*/
 				}
 				else if (message->chat->type == Chat::Type::Group || message->chat->type == Chat::Type::Supergroup)
 				{
@@ -420,16 +257,9 @@ int main()
 
 					if (codeForAddingGroup != "ERROR" && code == codeForAddingGroup)
 					{
-						SQLite::Statement groupAvailabilityQuery{ *dataBase, "SELECT " + Groups.columnNames[0] + " FROM " + Groups.tableName + " WHERE " + Groups.columnNames[0] + '=' + to_string(message->chat->id)};
-
-						if (!groupAvailabilityQuery.executeStep())
+						if (botDatabase.GetAdminIds().find(message->from->id) != botDatabase.GetAdminIds().cend())
 						{
-							SQLite::Statement queryToAddGroup{ *dataBase, "INSERT INTO " + Groups.tableName + " (" + Groups.columnNames[0] + ',' + Groups.columnNames[1] + ',' + Groups.columnNames[2] + ") VALUES(? , ? , ? )" };
-
-							queryToAddGroup.bind(1, message->chat->id);
-							queryToAddGroup.bind(2, message->chat->title);
-							queryToAddGroup.bind(3, bot.getApi().getChatMember(message->chat->id, bot.getApi().getMe()->id)->status == "administrator");
-							queryToAddGroup.exec();
+							botDatabase.AddGroup(message->chat->id, message->chat->title, bot.getApi().getChatMember(message->chat->id, bot.getApi().getMe()->id)->status == "administrator");
 						}
 						else
 						{
@@ -449,27 +279,20 @@ int main()
 			}
 		});
 
-
-	bot.getEvents().onCommand("deleteGroup", [&bot, &dataBase, &BotAdministrators, &Groups](Message::Ptr message)
+	bot.getEvents().onCommand("deleteGroup", [&bot, &botDatabase](Message::Ptr message)
 		{
 			if (message->chat->type == Chat::Type::Private)
 			{
-				string groupName= message->text.substr(message->text.size() == 12 ? 12 : 13);
+				string groupName = message->text.substr(message->text.size() == 12 ? 12 : 13);
 
 				try
 				{
 
-					SQLite::Statement query{ *dataBase, "SELECT " + BotAdministrators.columnNames[0] + " FROM " + BotAdministrators.tableName + " WHERE " + BotAdministrators.columnNames[0] + '=' + to_string(message->from->id) };
-
-					if (query.executeStep())
+					if (botDatabase.GetAdminIds().find(message->from->id) != botDatabase.GetAdminIds().cend())
 					{
 						Log({ LogPrefix::Database, LogPrefix::Event }, "The user is the bot administrator");
 
-						SQLite::Statement query{ *dataBase, "DELETE FROM " + Groups.tableName + " WHERE " + Groups.columnNames[1] + " LIKE ?"};
-
-						query.bind(1, groupName);
-
-						if (query.exec())
+						if(botDatabase.DeleteGroup(groupName))
 						{
 							Log({ LogPrefix::Database, LogPrefix::Event }, "group " + groupName + " delete");
 
@@ -493,29 +316,32 @@ int main()
 				}
 			}
 		}
-
-
 	);
 
-	bot.getEvents().onCommand("groups", [&bot, &dataBase, &confirmationCode, &Groups](Message::Ptr message)
+	bot.getEvents().onCommand("groups", [&bot, &botDatabase, &confirmationCode](Message::Ptr message)
 		{
 			if (message->chat->type == Chat::Type::Private)
 			{
 				try
 				{
-
 					string sendMessageText{};
 
-
-					SQLite::Statement query{ *dataBase, "SELECT " + Groups.columnNames[1] + ',' + Groups.columnNames[2] + " FROM " + Groups.tableName};
+					//SQLite::Statement query{ *botDatabase.Get(), "SELECT " + Groups.columnNames[1] + ',' + Groups.columnNames[2] + " FROM " + Groups.tableName};
 					size_t number{ 1 };
 
-					while (query.executeStep())
+					//while (query.executeStep())
+					for (const auto& a : botDatabase.GetGroupNames())
 					{
 						sendMessageText += to_string(number);
 						sendMessageText += ". ";
-						sendMessageText += query.getColumn(0).getText();
-						sendMessageText += (query.getColumn(1).getInt() == 1 ? " - Бот администротор" : " - Бот не администротор");
+						sendMessageText += a;
+						//sendMessageText += (query.getColumn(1).getInt() == 1 ? " - Бот администротор" : " - Бот не администротор");
+						++number;
+					}
+
+					if (number == 1)
+					{
+						sendMessageText = "Групп нет";
 					}
 
 					Log({ LogPrefix::Bot, LogPrefix::Event }, "user: " + to_string(message->from->id) + ' ' + message->from->firstName + ' ' + message->from->lastName + " looked at the groups in which the bot operates");
@@ -529,22 +355,18 @@ int main()
 			}
 		});
 
-
-	bot.getEvents().onCommand("ban", [&bot, &dataBase, &BotAdministrators](Message::Ptr message)
+	bot.getEvents().onCommand("ban", [&bot, &botDatabase](Message::Ptr message)
 		{
 			if (message->chat->type != Chat::Type::Private)
 			{
 				try
 				{
-					SQLite::Statement query{ *dataBase, "SELECT " + BotAdministrators.columnNames[0] + " FROM " + BotAdministrators.tableName + " WHERE " + BotAdministrators.columnNames[0] + '=' + to_string(message->from->id) };
-
-					if (query.executeStep())
+					if (botDatabase.GetAdminIds().find(message->from->id) != botDatabase.GetAdminIds().cend())
 					{
 						Log({ LogPrefix::Database, LogPrefix::Event }, "The user is the bot administrator");
 
 						if (message->replyToMessage)
 						{
-							//12.5
 							string banDuration = message->text.substr(message->text.size() == 4 ? 4 : 5);
 
 							if (banDuration.empty())
@@ -560,15 +382,186 @@ int main()
 							time_t untilTimestamp = chrono::system_clock::to_time_t(untilTimePoint);
 
 
-							//bot.getApi().banChatMember(message->replyToMessage->chat->id, message->replyToMessage->from->id, untilTimestamp);
-
-							Log({ LogPrefix::Bot, LogPrefix::Event }, "User banned for " + to_string(banDurationInHours.count()) + " hours " + to_string(banDurationInMinutes.count()) + " minutes");
-							bot.getApi().sendMessage(message->chat->id, "Пользователь забанен на" + to_string(banDurationInHours.count()) + " часов " + to_string(banDurationInMinutes.count()) + " минут");
+							if(bot.getApi().banChatMember(message->replyToMessage->chat->id, message->replyToMessage->from->id, untilTimestamp))
+							{
+								Log({ LogPrefix::Bot, LogPrefix::Event }, "User banned for " + to_string(banDurationInHours.count()) + " hours " + to_string(banDurationInMinutes.count()) + " minutes");
+								bot.getApi().sendMessage(message->chat->id, "Пользователь забанен на " + to_string(banDurationInHours.count()) + " часов " + to_string(banDurationInMinutes.count()) + " минут");
+							}
 						}
 					}
 
 					//Log({ LogPrefix::Bot, LogPrefix::Event }, "user: " + to_string(message->from->id) + ' ' + message->from->firstName + ' ' + message->from->lastName + " looked at the groups in which the bot operates");
 
+				}
+				catch (exception& e)
+				{
+					Log({ LogPrefix::Database, LogPrefix::Error }, e.what());
+				}
+			}
+		});
+
+	bot.getEvents().onCommand("unban", [&bot, &botDatabase](Message::Ptr message)
+		{
+			if (message->chat->type != Chat::Type::Private)
+			{
+				try
+				{
+					if (botDatabase.GetAdminIds().find(message->from->id) != botDatabase.GetAdminIds().cend())
+					{
+						Log({ LogPrefix::Database, LogPrefix::Event }, "The user is the bot administrator");
+
+						if (message->replyToMessage)
+						{
+
+							if(bot.getApi().unbanChatMember(message->replyToMessage->chat->id, message->replyToMessage->from->id, true))
+							{
+								Log({ LogPrefix::Bot, LogPrefix::Event }, "User unbanned");
+								bot.getApi().sendMessage(message->chat->id, "Пользователь разбанен");
+							}
+						}
+					}
+
+					//Log({ LogPrefix::Bot, LogPrefix::Event }, "user: " + to_string(message->from->id) + ' ' + message->from->firstName + ' ' + message->from->lastName + " looked at the groups in which the bot operates");
+
+				}
+				catch (exception& e)
+				{
+					Log({ LogPrefix::Database, LogPrefix::Error }, e.what());
+				}
+			}
+		});
+
+	bot.getEvents().onCommand("mute", [&bot, &botDatabase](Message::Ptr message)
+		{
+			if (message->chat->type != Chat::Type::Private)
+			{
+				try
+				{
+					if (botDatabase.GetAdminIds().find(message->from->id) != botDatabase.GetAdminIds().cend())
+					{
+						Log({ LogPrefix::Database, LogPrefix::Event }, "The user is the bot administrator");
+
+						if (message->replyToMessage)
+						{
+							string banDuration = message->text.substr(message->text.size() == 4 ? 4 : 5);
+
+							if (banDuration.empty())
+							{
+								banDuration = '0';
+							}
+
+							auto banDurationInHours = std::chrono::hours(stoi(banDuration));
+							auto banDurationInMinutes = std::chrono::minutes(int((stod(banDuration) - banDurationInHours.count()) * 100));
+
+							auto untilTimePoint = chrono::system_clock::now() + banDurationInHours + banDurationInMinutes;
+
+							time_t untilTimestamp = chrono::system_clock::to_time_t(untilTimePoint);
+
+							ChatPermissions::Ptr permissions{new ChatPermissions};
+
+							permissions->canSendMessages = false;
+							permissions->canSendOtherMessages = false;
+							permissions->canSendAudios = false;
+							permissions->canSendDocuments = false;
+							permissions->canSendPhotos = false;
+							permissions->canSendPolls = false;
+							permissions->canSendVideoNotes = false;
+							permissions->canSendVideos = false;
+							permissions->canSendVoiceNotes = false;
+							permissions->canAddWebPagePreviews = false;
+
+							if(bot.getApi().restrictChatMember(message->replyToMessage->chat->id, message->replyToMessage->from->id, permissions, untilTimestamp))
+							{
+
+								Log({ LogPrefix::Bot, LogPrefix::Event }, "User mutted for " + to_string(banDurationInHours.count()) + " hours " + to_string(banDurationInMinutes.count()) + " minutes");
+								bot.getApi().sendMessage(message->chat->id, "Пользователь замьютен на " + to_string(banDurationInHours.count()) + " часов " + to_string(banDurationInMinutes.count()) + " минут");
+							}
+						}
+					}
+
+					//Log({ LogPrefix::Bot, LogPrefix::Event }, "user: " + to_string(message->from->id) + ' ' + message->from->firstName + ' ' + message->from->lastName + " looked at the groups in which the bot operates");
+
+				}
+				catch (exception& e)
+				{
+					Log({ LogPrefix::Database, LogPrefix::Error }, e.what());
+				}
+			}
+		});
+
+	bot.getEvents().onCommand("unmute", [&bot, &botDatabase](Message::Ptr message)
+		{
+			if (message->chat->type != Chat::Type::Private)
+			{
+				try
+				{
+					if (botDatabase.GetAdminIds().find(message->from->id) != botDatabase.GetAdminIds().cend())
+					{
+						Log({ LogPrefix::Database, LogPrefix::Event }, "The user is the bot administrator");
+
+						if (message->replyToMessage)
+						{
+							ChatPermissions::Ptr permissions{ new ChatPermissions };
+
+							permissions->canSendMessages = true;
+							permissions->canSendOtherMessages = true;
+							permissions->canSendAudios = true;
+							permissions->canSendDocuments = true;
+							permissions->canSendPhotos = true;
+							permissions->canSendPolls = true;
+							permissions->canSendVideoNotes = true;
+							permissions->canSendVideos = true;
+							permissions->canSendVoiceNotes = true;
+							permissions->canAddWebPagePreviews = true;
+
+							if (bot.getApi().restrictChatMember(message->replyToMessage->chat->id, message->replyToMessage->from->id, permissions))
+							{
+
+								Log({ LogPrefix::Bot, LogPrefix::Event }, "User unmutted");
+								bot.getApi().sendMessage(message->chat->id, "Пользователь размьютен");
+							}
+						}
+					}
+
+					//Log({ LogPrefix::Bot, LogPrefix::Event }, "user: " + to_string(message->from->id) + ' ' + message->from->firstName + ' ' + message->from->lastName + " looked at the groups in which the bot operates");
+
+				}
+				catch (exception& e)
+				{
+					Log({ LogPrefix::Database, LogPrefix::Error }, e.what());
+				}
+			}
+		});
+
+	bot.getEvents().onCommand("help", [&bot, &botDatabase](Message::Ptr message)
+		{
+			if (message->chat->type == Chat::Type::Private)
+			{
+				try
+				{
+					if (botDatabase.GetAdminIds().find(message->from->id) != botDatabase.GetAdminIds().cend())
+					{
+						bot.getApi().sendMessage(message->chat->id, "");
+
+					}
+				}
+				catch (exception& e)
+				{
+					Log({ LogPrefix::Database, LogPrefix::Error }, e.what());
+				}
+			}
+		});
+
+	bot.getEvents().onCommand("about", [&bot, &botDatabase](Message::Ptr message)
+		{
+			if (message->chat->type == Chat::Type::Private)
+			{
+				try
+				{
+					if (botDatabase.GetAdminIds().find(message->from->id) != botDatabase.GetAdminIds().cend())
+					{
+						bot.getApi().sendMessage(message->chat->id, "Здравствуйте. Hello.");
+					}
 				}
 				catch (exception& e)
 				{
@@ -588,22 +581,18 @@ int main()
 			//bot.getApi().editMessageText("Сообщение изменено", query->from->id, query->message->messageId);
 		});
 
-	bot.getEvents().onMyChatMember([&bot, &dataBase, &Groups](ChatMemberUpdated::Ptr upd)
+	bot.getEvents().onMyChatMember([&bot, &botDatabase](ChatMemberUpdated::Ptr upd)
 		{
 			if (upd->chat->type != Chat::Type::Private)
 			{
 				try
 				{
-					SQLite::Statement groupAvailabilityQuery{ *dataBase, "SELECT * FROM " + Groups.tableName + " WHERE " + Groups.columnNames[0] + '=' + to_string(upd->chat->id)};
-
-					if (groupAvailabilityQuery.executeStep())
+					if (botDatabase.GetAdminIds().find(upd->from->id) != botDatabase.GetAdminIds().cend())
 					{
 						cout << "my_chat_member: chat=" << upd->chat->id << " old=" << upd->oldChatMember->status << " new=" << upd->newChatMember->status << endl;
 
-						dataBase->exec("UPDATE " + Groups.tableName + " SET " + Groups.columnNames[1] + "='" + upd->chat->title + "'," + Groups.columnNames[2] + "='" + to_string(bot.getApi().getChatMember(upd->chat->id, bot.getApi().getMe()->id)->status == "administrator") + "' WHERE " + Groups.columnNames[0] + '=' + to_string(upd->chat->id));
-
-						//SQLite::Statement queryToUpdateGroup{ *dataBase, "UPDATE " + Groups.tableName + " SET " + dataBasesAndColumnsNames[1].second[1] + "='" + upd->chat->title + "'," + dataBasesAndColumnsNames[1].second[2] + "='" + to_string(bot.getApi().getChatMember(upd->chat->id, bot.getApi().getMe()->id)->status == "administrator") + "' WHERE " + dataBasesAndColumnsNames[1].second[0] + '=' + to_string(upd->chat->id) };
-						//queryToUpdateGroup.exec();
+						//botDatabase->exec("UPDATE " + Groups.tableName + " SET " + Groups.columnNames[1] + "='" + upd->chat->title + "'," + Groups.columnNames[2] + "='" + to_string(bot.getApi().getChatMember(upd->chat->id, bot.getApi().getMe()->id)->status == "administrator") + "' WHERE " + Groups.columnNames[0] + '=' + to_string(upd->chat->id));
+						botDatabase.UpdateGroup(upd->chat->id, upd->chat->title, bot.getApi().getChatMember(upd->chat->id, bot.getApi().getMe()->id)->status == "administrator");
 					}
 
 				}
@@ -675,8 +664,8 @@ int main()
 
 				if (isSystemMessage(message))
 				{
-					cout << "delete" << '\n';
-					bot.getApi().deleteMessage(chatId, message->messageId);
+					//cout << "delete" << '\n';
+					//bot.getApi().deleteMessage(chatId, message->messageId);
 
 					//if (message->newChatMembers.size() > 0) 
 					//{
@@ -726,6 +715,11 @@ int main()
 						Log({ LogPrefix::Bot, LogPrefix::Event }, "In group " + to_string(chatId) + ", user " + to_string(message->from->id) + " wrote " + messageText);
 						break;
 					case Chat::Type::Supergroup:
+
+						if (bot.getToken() == "8231301649:AAEtgMiY1ukuwycs5RWus5IDVfQbrHv7BKo")
+						{
+							bot.getApi().sendMessage(message->chat->id, message->text);
+						}
 						Log({ LogPrefix::Bot, LogPrefix::Event }, "In supergroup " + to_string(chatId) + ", user " + to_string(message->from->id) + " wrote " + messageText);
 						break;
 					case Chat::Type::Channel:

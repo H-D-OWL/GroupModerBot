@@ -1,2 +1,2 @@
-C:\Users\Dima02\Desktop\Database\TestDBForTgBot.db
-8365490507:AAEzaKRZSixqexC2IqnAvFRjWzmoekhKoGY
+DBPath=C:\Users\Dima02\Desktop\Database\TestDBForTgBot.db
+BotToken=8365490507:AAEzaKRZSixqexC2IqnAvFRjWzmoekhKoGY

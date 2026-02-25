@@ -1,8 +1,20 @@
-﻿  TestTGBot.cpp
+﻿  BotController.cpp
   Please define _WIN32_WINNT or _WIN32_WINDOWS appropriately. For example:
   - add -D_WIN32_WINNT=0x0601 to the compiler command line; or
   - add _WIN32_WINNT=0x0601 to your project's Preprocessor Definitions.
   Assuming _WIN32_WINNT=0x0601 (i.e. Windows 7 target).
+  BotDatabase.cpp
+  Please define _WIN32_WINNT or _WIN32_WINDOWS appropriately. For example:
+  - add -D_WIN32_WINNT=0x0601 to the compiler command line; or
+  - add _WIN32_WINNT=0x0601 to your project's Preprocessor Definitions.
+  Assuming _WIN32_WINNT=0x0601 (i.e. Windows 7 target).
+  TestTGBot.cpp
+  Please define _WIN32_WINNT or _WIN32_WINDOWS appropriately. For example:
+  - add -D_WIN32_WINNT=0x0601 to the compiler command line; or
+  - add _WIN32_WINNT=0x0601 to your project's Preprocessor Definitions.
+  Assuming _WIN32_WINNT=0x0601 (i.e. Windows 7 target).
+C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\TestTGBot.cpp(385,108): warning C4244: 'argument': conversion from 'time_t' to 'int32_t', possible loss of data
+  Generating Code...
   TestTGBot.vcxproj -> C:\Users\Dima02\Desktop\C++\TestTGBot\x64\Debug\TestTGBot.exe
   'pwsh.exe' is not recognized as an internal or external command,
   operable program or batch file.
