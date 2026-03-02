@@ -1,24 +1,36 @@
-#include "logging.h"
+﻿#include "logging.h"
+//#include <chrono>
+
 
 namespace logging
 {
-	constexpr const string_view LogPrefixToText(LogPrefix lp)
- {
-		switch (lp)
+	constexpr const string_view LogPrefixToText(LogSource ls)
+	{
+		switch (ls)
 		{
-		case LogPrefix::Program:  return "[PROGRAM]";
-		case LogPrefix::Database: return "[DATABASE]";
-		case LogPrefix::Bot:      return "[BOT]";
-		case LogPrefix::Event:    return "[EVENT]";
-		case LogPrefix::Error:    return "[ERROR]";
-		default:                  return "";
+		case LogSource::Program:	return "[PROGRAM]";
+		case LogSource::Database:	return "[DATABASE]";
+		case LogSource::Bot:		return "[BOT]";
+		default:					return "";
 		}
 	}
 
-	void Log(const vector<LogPrefix>& logPrefixs, const string_view log = "")
+	constexpr const string_view LogPrefixToText(LogType lt)
 	{
-		for (const auto& lp : logPrefixs)
-			clog << LogPrefixToText(lp) << ' ';
-		clog << log << '\n';
+		switch (lt)
+		{
+		case LogType::Event:		return "[EVENT]";
+		case LogType::Error:		return "[ERROR]";
+		case LogType::FatalError:   return "[FATAL ERROR]";
+		default:					return "";
+		}
 	}
+
+
+
+	void Log(const LogSource logSource, const LogType logType, const string_view log)
+	{
+		clog << LogPrefixToText(logSource) << ' ' << LogPrefixToText(logType) << ' ' << log << '\n';
+	}
+
 }

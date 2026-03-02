@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <iostream>
 #include <vector>
@@ -14,62 +14,78 @@ using namespace std;
 using namespace TgBot;
 using namespace logging;
 
-
 	class BotDatabase
 	{
 	public:
 		BotDatabase();
 		~BotDatabase();
 
+		struct Admin
+		{
+			int64_t id{};
+			string firstName{}, lastName{}, username{};
+			bool isBot{}, isPremium{}, isBotOwner{};
+		};
+
+		struct Group
+		{
+			int64_t id{};
+			string title{};
+			Chat::Type type{};
+			bool isBotAdmin{}, isBotActive{};
+		};
+
 		const unique_ptr<SQLite::Database>& Get() const;
 		bool Open(const string& pathToDatabase);
-		bool CheckStructure();
-		bool CacheReload();
+		bool CheckStructure() const;
+		bool CacheLoad();
 
 
-		bool isTableEmpty(const string& tableName);
-		bool TableHasColumn(const string& tableName, const string& columnName);
+		bool isTableEmpty(const string& tableName) const;
+		bool TableHasColumn(const string& tableName, const string& columnName) const;
 		
-		const unordered_set<int64_t>& GetAdminIds() const;
-		bool SetAdmin(const int64_t memberId, const string& memberFirstName);
-		
-		const unordered_set<string> GetGroupNames() const;
-		bool AddGroup(const int64_t groupId, const string& groupName, const bool botIsAdmin);
-		bool UpdateGroup(const int64_t groupId, const string& groupName, const bool botIsAdmin);
-		bool DeleteGroup(const string& groupName);
+		Admin GetAdmin(const int64_t memberId) const;
+		bool IsAdmin(const int64_t memberId) const;
+		size_t GetNumberAdmins() const;
+		bool AddAdmin(const Admin& member);
 
+		bool AddGroup(const Group& group);
+		bool UpdateGroup(const Group& group);
+		unordered_map<int64_t, Group> GetGroups() const;
+		bool DeleteGroup(const int64_t id);
 
 	private:
 
-		//struct Group
-		//{
-		//	id Id;
-		//	string Name;
-		//};
+		bool AddAdminToCache(const Admin& admin);
+
+		bool AddGroupToCache(const Group& group);
+		bool UpdateGroupFromCache(const Group& group);
+		bool DeleteGroupFromCache(const int64_t id);
+
 
 		struct Cache
 		{
-			unordered_set<int64_t> adminIds{};
-			unordered_set<int64_t> groupIds{};
-			//unordered_map<int64_t, string> groupNames{};
-			
-			//unordered_map<id, Group> data;
+			unordered_map<int64_t, Admin> admins{};
+			//unordered_map<string, int64_t> adminIdsByUsername{};
 
-
-			unordered_map<string, int64_t> groupNames;
-		
+			unordered_map<int64_t, Group> groups{};
+			//unordered_map<string, int64_t> groupIdsByTitle{};		
 		};
 
 		struct Table
 		{
 			const string tableName{};
 			const vector<string> columnNames{};
+
+			string GetColumnNames() const;
+			string GetPlaceholders() const;
+			string GetColumnsEqualValues(const vector<string> values) const;
 		};
 
 		unique_ptr<SQLite::Database> botDatabase;
 
-		Table BotAdministrators{ "BotAdministrators", {"AdministratorId", "AdministratorName", "IsOwner"} };
-		Table Groups{ "Groups", {"GroupId", "GroupName", "BotIsAdministrator"} };
+		Table BotAdministrators{ "BotAdministrators", {"Id", "FirstName", "LastName", "Username", "IsBot", "IsPremium", "IsBotOwner"} };
+		Table Groups{ "Groups", {"Id", "Title", "Type", "IsBotAdmin", "IsBotActive"}};
 
 		const vector<pair<string, const vector<string>>> tableAndcolumnNames{
 			{BotAdministrators.tableName, BotAdministrators.columnNames},

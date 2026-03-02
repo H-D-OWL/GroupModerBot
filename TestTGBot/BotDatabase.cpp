@@ -1,150 +1,272 @@
-#include "BotDatabase.h"
+﻿#include "BotDatabase.h"
 
 
 
 
-	BotDatabase::BotDatabase()
+BotDatabase::BotDatabase()
+{
+}
+
+BotDatabase::~BotDatabase()
+{
+}
+
+const unique_ptr<SQLite::Database>& BotDatabase::Get() const
+{
+	return botDatabase;
+}
+
+bool BotDatabase::Open(const string& pathToDatabase)
+{
+	if(pathToDatabase.empty())
+		throw SQLite::Exception("database is already open");
+
+	if (botDatabase)
+		throw SQLite::Exception("database is already open");
+
+	botDatabase = make_unique<SQLite::Database>(pathToDatabase, SQLite::OPEN_READWRITE);
+	
+	return true;
+}
+
+bool BotDatabase::CheckStructure() const
+{
+	for (const auto& data : tableAndcolumnNames)
 	{
-	}
-
-	BotDatabase::~BotDatabase()
-	{
-	}
-
-	const unique_ptr<SQLite::Database>& BotDatabase::Get() const
-	{
-		return botDatabase;
-	}
-
-	bool BotDatabase::Open(const string& pathToDatabase)
-	{
-		if (botDatabase)
-			return false;
-		botDatabase = make_unique<SQLite::Database>(pathToDatabase, SQLite::OPEN_READWRITE);
-		return true;
-	}
-
-	bool BotDatabase::CheckStructure()
-	{
-		for (const auto& data : tableAndcolumnNames)
+		if (botDatabase->tableExists(data.first))
 		{
-			if (botDatabase->tableExists(data.first))
+			for (const auto& column : data.second)
 			{
-				for (const auto& column : data.second)
+				if (!TableHasColumn(data.first, column))
 				{
-					if (!TableHasColumn(data.first, column))
-					{
-						throw SQLite::Exception("table " + data.first + " has no column named " + column);
-					}
+					throw SQLite::Exception("table " + data.first + " has no column named " + column);
 				}
 			}
-			else
-			{
-				throw SQLite::Exception("no such table: " + data.first);
-			}
-		}	
-
-		return true;
-	}
-
-	bool BotDatabase::CacheReload()
-	{
-		SQLite::Statement adminsQuery{ *botDatabase, "SELECT " + BotAdministrators.columnNames[0] + " FROM " + BotAdministrators.tableName};
-
-		while (adminsQuery.executeStep())
-			Cache.adminIds.emplace(adminsQuery.getColumn(0).getInt64());
-
-		SQLite::Statement groupsQuery{ *botDatabase, "SELECT " + Groups.columnNames[0] + ',' + Groups.columnNames[1] + " FROM " + Groups.tableName};
-
-		while (groupsQuery.executeStep())
-		{
-			Cache.groupNames.emplace(groupsQuery.getColumn(1).getString(), groupsQuery.getColumn(0).getInt64());
-			Cache.groupIds.emplace(groupsQuery.getColumn(0).getInt64());
 		}
-
-		return true;
-	}
-
-	bool BotDatabase::isTableEmpty(const string& tableName)
-	{
-		SQLite::Statement query(*botDatabase, "SELECT 1 FROM " + tableName + " LIMIT 1");
-		return !query.executeStep();
-	}
-
-	bool BotDatabase::TableHasColumn(const string& tableName, const string& columnName)
-	{
-		SQLite::Statement query(*botDatabase, "PRAGMA table_info(" + tableName + ")");
-
-		while (query.executeStep())
-			if (query.getColumn(1).getText() == columnName)
-				return true;
-
-		return false;
-	}
-
-	const unordered_set<int64_t>& BotDatabase::GetAdminIds() const
-	{
-		return Cache.adminIds;
-	}
-
-	bool BotDatabase::SetAdmin(const int64_t memberId, const string& memberFirstName)
-	{
-		if (Cache.adminIds.find(memberId) == Cache.adminIds.cend())
+		else
 		{
-			SQLite::Statement query{ *botDatabase, "INSERT INTO " + BotAdministrators.tableName + " (" + BotAdministrators.columnNames[0] + ',' + BotAdministrators.columnNames[1] + ',' + BotAdministrators.columnNames[2] + ") VALUES(? , ? , ? )" };
+			throw SQLite::Exception("no such table: " + data.first);
+		}
+	}
 
-			query.bind(1, memberId);
-			query.bind(2, memberFirstName);
-			query.bind(3, Cache.adminIds.empty());
-			query.exec();
+	return true;
+}
 
-			Cache.adminIds.emplace(memberId);
+bool BotDatabase::CacheLoad()
+{
+	SQLite::Statement adminsQuery{ *botDatabase, "SELECT " + BotAdministrators.GetColumnNames() + " FROM " + BotAdministrators.tableName };
 
+	while (adminsQuery.executeStep())
+		AddAdminToCache(Admin{
+		.id				= adminsQuery.getColumn(0).getInt64(),
+		.firstName		= adminsQuery.getColumn(1).getString(),
+		.lastName		= adminsQuery.getColumn(2).getString(),
+		.username		= adminsQuery.getColumn(3).getString(),
+		.isBot			= static_cast<bool>(adminsQuery.getColumn(4).getInt64()),
+		.isPremium		= static_cast<bool>(adminsQuery.getColumn(5).getInt64()),
+		.isBotOwner		= static_cast<bool>(adminsQuery.getColumn(6).getInt64())
+			});
+
+	SQLite::Statement groupsQuery{ *botDatabase, "SELECT " + Groups.GetColumnNames() + " FROM " + Groups.tableName };
+
+	while (groupsQuery.executeStep())
+	{
+		AddGroupToCache(Group{
+		.id				= groupsQuery.getColumn(0).getInt64(),
+		.title			= groupsQuery.getColumn(1).getString(),
+		.type			= static_cast<Chat::Type>(groupsQuery.getColumn(2).getInt64()),
+		.isBotAdmin		= static_cast<bool>(groupsQuery.getColumn(3).getInt64()),
+		.isBotActive	= static_cast<bool>(groupsQuery.getColumn(4).getInt64())
+			});
+	}
+
+	return true;
+}
+
+bool BotDatabase::isTableEmpty(const string& tableName) const
+{
+	SQLite::Statement query(*botDatabase, "SELECT 1 FROM " + tableName + " LIMIT 1");
+
+	return !query.executeStep();
+}
+
+bool BotDatabase::TableHasColumn(const string& tableName, const string& columnName) const
+{
+	SQLite::Statement query(*botDatabase, "PRAGMA table_info(" + tableName + ")");
+
+	while (query.executeStep())
+		if (query.getColumn(1).getText() == columnName)
 			return true;
-		}
 
-		return false;
-	}
+	return false;
+}
 
-	const unordered_set<string> BotDatabase::GetGroupNames() const
+bool BotDatabase::AddAdmin(const Admin& member)
+{
+	if (member.username.empty())
+		throw runtime_error{ "The user must have a Telegram username (with @)" };
+
+	if (IsAdmin(member.id))
+		throw runtime_error{ "User " + member.username + " is already an administrator" };
+
+	SQLite::Statement query{ *botDatabase, "INSERT INTO " + BotAdministrators.tableName + " (" + BotAdministrators.GetColumnNames() + ") VALUES(" + BotAdministrators.GetPlaceholders() + ')'};
+
+	query.bind(1, member.id);
+	query.bind(2, member.firstName);
+	query.bind(3, member.lastName);
+	query.bind(4, member.username);
+	query.bind(5, member.isBot);
+	query.bind(6, member.isPremium);
+	query.bind(7, !GetNumberAdmins());
+	query.exec();
+
+	AddAdminToCache(Admin{
+	.id = member.id,
+	.firstName = member.firstName,
+	.lastName = member.lastName,
+	.username = member.username,
+	.isBot = member.isBot,
+	.isPremium = member.isPremium,
+	.isBotOwner = !GetNumberAdmins()
+		});
+
+	return true;
+}
+
+bool BotDatabase::AddGroup(const Group& group)
+{
+	if (Cache.groups.contains(group.id))
+		throw SQLite::Exception("group " + group.title + " already exists");
+
+	SQLite::Statement queryToAddGroup{ *botDatabase, "INSERT INTO " + Groups.tableName + " (" + Groups.GetColumnNames() + ") VALUES(" + Groups.GetPlaceholders() + ')' };
+
+	queryToAddGroup.bind(1, group.id);
+	queryToAddGroup.bind(2, group.title);
+	queryToAddGroup.bind(3, static_cast<int64_t>(group.type));
+	queryToAddGroup.bind(4, static_cast<int64_t>(group.isBotAdmin));
+	queryToAddGroup.bind(5, static_cast<int64_t>(false));
+	queryToAddGroup.exec();
+
+	AddGroupToCache(Group{
+	.id = group.id,
+	.title = group.title,
+	.type = group.type,
+	.isBotAdmin = group.isBotAdmin,
+	.isBotActive = false 
+		});
+
+	return true;
+}
+
+bool BotDatabase::UpdateGroup(const Group& group)
+{
+	botDatabase->exec("UPDATE " + Groups.tableName + " SET " + Groups.GetColumnsEqualValues({ to_string(group.id), group.title, to_string(static_cast<int64_t>(group.type)), to_string(static_cast<int64_t>(group.isBotAdmin)), to_string(group.isBotActive)}) + " WHERE " + Groups.columnNames[0] + " LIKE " + to_string(group.id));
+
+	UpdateGroupFromCache(group);
+
+	return true;
+}
+
+unordered_map<int64_t, BotDatabase::Group> BotDatabase::GetGroups() const
+{
+	return Cache.groups;
+}
+
+bool BotDatabase::DeleteGroup(const int64_t id)
+{
+	if (!Cache.groups.contains(id))
+		throw SQLite::Exception("group does not exist");
+
+	SQLite::Statement query{ *botDatabase, "DELETE FROM " + Groups.tableName + " WHERE " + Groups.columnNames[0] + " LIKE ?" };
+
+	query.bind(1, id);
+	query.exec();
+
+	DeleteGroupFromCache(id);
+
+	return true;
+}
+
+BotDatabase::Admin BotDatabase::GetAdmin(const int64_t memberId) const
+{
+	return (*Cache.admins.find(memberId)).second;
+}
+
+bool BotDatabase::IsAdmin(const int64_t memberId) const
+{
+	return Cache.admins.contains(memberId);
+}
+
+size_t BotDatabase::GetNumberAdmins() const
+{
+	return Cache.admins.size();
+}
+
+bool BotDatabase::AddAdminToCache(const Admin& admin)
+{
+	return Cache.admins.emplace(admin.id, admin).second;
+}
+
+bool BotDatabase::AddGroupToCache(const Group& group)
+{
+	return Cache.groups.emplace(group.id, group).second;
+}
+
+bool BotDatabase::UpdateGroupFromCache(const Group& group)
+{
+	auto& cachedGroup = (*Cache.groups.find(group.id)).second;
+
+	cachedGroup.title = group.title;
+	cachedGroup.type = group.type;
+	cachedGroup.isBotAdmin = group.isBotAdmin;
+	cachedGroup.isBotActive = group.isBotActive;
+
+	return true;
+}
+
+bool BotDatabase::DeleteGroupFromCache(const int64_t id)
+{
+	return Cache.groups.erase(id);
+}
+
+string BotDatabase::Table::GetColumnNames() const
+{
+	string AllColumnNames{};
+
+	for (const auto& column : columnNames)
 	{
-		unordered_set<string> names{};
-		for (const auto& a : Cache.groupNames)
-			names.emplace(a.first);
-		return names;
+		AllColumnNames += column + ',';
 	}
 
-	bool BotDatabase::AddGroup(const int64_t groupId, const string& groupName, const bool botIsAdmin)
+	AllColumnNames.pop_back();
+
+	return AllColumnNames;
+}
+
+string BotDatabase::Table::GetPlaceholders() const
+{
+	string Placeholders{};
+
+	for (auto a = 0; a < columnNames.size(); ++a)
 	{
-		SQLite::Statement queryToAddGroup{ *botDatabase, "INSERT INTO " + Groups.tableName + " (" + Groups.columnNames[0] + ',' + Groups.columnNames[1] + ',' + Groups.columnNames[2] + ") VALUES(? , ? , ? )" };
-		queryToAddGroup.bind(1, groupId);
-		queryToAddGroup.bind(2, groupName);
-		queryToAddGroup.bind(3, botIsAdmin);
-		queryToAddGroup.exec();
-
-		Cache.groupIds.emplace(groupId);
-		Cache.groupNames.emplace(groupName, groupId);
-
-		return true;
+		Placeholders += "?,";
 	}
 
-	bool BotDatabase::UpdateGroup(const int64_t groupId, const string& groupName, const bool botIsAdmin)
+	Placeholders.pop_back();
+
+	return Placeholders;
+}
+
+string BotDatabase::Table::GetColumnsEqualValues(const vector<string> values) const
+{
+	string ColumnsEqualValues{};
+
+	for (auto i = 0; i < columnNames.size(); ++i)
 	{
-		botDatabase->exec("UPDATE " + Groups.tableName + " SET " + Groups.columnNames[1] + "='" + groupName + "'," + Groups.columnNames[2] + "='" + to_string(botIsAdmin) + "' WHERE " + Groups.columnNames[0] + '=' + to_string(groupId));
-
-		return true;
+		ColumnsEqualValues += columnNames[i] + "='" + values[i] + "',";
 	}
 
-	bool BotDatabase::DeleteGroup(const string& groupName)
-	{
-		SQLite::Statement query{ *botDatabase, "DELETE FROM " + Groups.tableName + " WHERE " + Groups.columnNames[1] + " LIKE ?" };
-		query.bind(1, groupName);
-		query.exec();
+	ColumnsEqualValues.pop_back();
 
-		Cache.groupIds.erase((*Cache.groupNames.find(groupName)).second);
-		Cache.groupNames.erase(groupName);
-
-		return true;
-	}
-
-
+	return ColumnsEqualValues;
+}

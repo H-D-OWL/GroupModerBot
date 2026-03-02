@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <iostream>
 #include <vector>
@@ -8,14 +8,25 @@ using namespace std;
 
 namespace logging
 {
-	enum class LogPrefix 
+	enum class LogSource
 	{
 		Program,
 		Database,
 		Bot,
-		Event,
-		Error
 	};
 
-	void Log(const vector<LogPrefix>& logPrefixs, const string_view log);
+	enum class LogType
+	{
+		Event,
+		Error,
+		FatalError,
+	};
+
+	//struct Context
+	//{
+	//	string memberId{}, username{}, chatId{}, title{}, messageText{}, logText;
+
+	//};
+
+	void Log(const LogSource logSource, const LogType logType, const string_view log);
 }
