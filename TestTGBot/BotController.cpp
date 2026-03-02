@@ -52,14 +52,14 @@ void BotController::OnStart(Message::Ptr message)
 			confirmationCode = "ERROR";
 
 			Log(LogSource::Bot, LogType::Event, "user: " + to_string(message->from->id) + ' ' + message->from->firstName + ' ' + message->from->lastName + " entered the correct confirmation code and became a moderator");
-			bot.getApi().sendMessage(message->chat->id, "Вы стали модератором");
+			bot.getApi().sendMessage(message->chat->id, "You have become a moderator");
 
 		}
 		else if (confirmationCode != "ERROR" && !code.empty())
 		{
 			Log(LogSource::Bot, LogType::Error, "user: " + to_string(message->from->id) + " entered an incorrect confirmation code and did not become a moderator");
 
-			bot.getApi().sendMessage(message->chat->id, "Код подтверждения неверен.");
+			bot.getApi().sendMessage(message->chat->id, "The confirmation code is incorrect");
 
 		}
 	}
@@ -150,7 +150,7 @@ void BotController::OnBan(Message::Ptr message)
 				if (bot.getApi().banChatMember(message->replyToMessage->chat->id, message->replyToMessage->from->id, untilTimestamp))
 				{
 					Log(LogSource::Bot, LogType::Event, "User banned for " + to_string(banDurationInHours.count()) + " hours " + to_string(banDurationInMinutes.count()) + " minutes");
-					bot.getApi().sendMessage(message->chat->id, "Пользователь забанен на " + to_string(banDurationInHours.count()) + " часов " + to_string(banDurationInMinutes.count()) + " минут");
+					bot.getApi().sendMessage(message->chat->id, "The user has been banned for " + to_string(banDurationInHours.count()) + " hours  " + to_string(banDurationInMinutes.count()) + " minutes");
 				}
 			}
 		}
@@ -172,7 +172,7 @@ void BotController::OnUnban(Message::Ptr message)
 				if (bot.getApi().unbanChatMember(message->replyToMessage->chat->id, message->replyToMessage->from->id, true))
 				{
 					Log(LogSource::Bot, LogType::Event, "User unbanned");
-					bot.getApi().sendMessage(message->chat->id, "Пользователь разбанен");
+					bot.getApi().sendMessage(message->chat->id, "The user has been unbanned");
 				}
 			}
 		}
@@ -221,7 +221,7 @@ void BotController::OnMute(Message::Ptr message)
 				{
 
 					Log(LogSource::Bot, LogType::Event, "User mutted for " + to_string(banDurationInHours.count()) + " hours " + to_string(banDurationInMinutes.count()) + " minutes");
-					bot.getApi().sendMessage(message->chat->id, "Пользователь замьютен на " + to_string(banDurationInHours.count()) + " часов " + to_string(banDurationInMinutes.count()) + " минут");
+					bot.getApi().sendMessage(message->chat->id, "The user has been muted for " + to_string(banDurationInHours.count()) + " hours  " + to_string(banDurationInMinutes.count()) + " minutes");
 				}
 			}
 		}
@@ -255,7 +255,7 @@ void BotController::OnUnmute(Message::Ptr message)
 				{
 
 					Log(LogSource::Bot, LogType::Event, "User unmutted");
-					bot.getApi().sendMessage(message->chat->id, "Пользователь размьютен");
+					bot.getApi().sendMessage(message->chat->id, "The user is unmuted");
 				}
 			}
 		}

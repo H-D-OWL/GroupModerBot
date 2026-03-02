@@ -37,8 +37,15 @@
 *.out
 *.app
 
+# User data
+DataForBot.txt
+*.db
+
 # Visual Studio files 
-.vs
+.vs/
+x64/
+Debug/
+Release/
 
 # debug information files
 *.dwo
