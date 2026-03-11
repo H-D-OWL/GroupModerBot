@@ -26,7 +26,7 @@ namespace logging
 
 	struct OnEventResult
 	{
-		const string_view logText, messageText;
+		const string logText, messageText;
 	};
 
 	struct ContextLog

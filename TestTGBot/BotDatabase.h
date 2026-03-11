@@ -30,7 +30,7 @@ using namespace logging;
 		struct Group
 		{
 			int64_t id{};
-			string title{};
+			string title{}, uniqueTitle{};
 			Chat::Type type{};
 			bool isBotAdmin{}, isBotActive{};
 		};
@@ -85,7 +85,7 @@ using namespace logging;
 		unique_ptr<SQLite::Database> botDatabase;
 
 		Table BotAdministrators{ "BotAdministrators", {"Id", "FirstName", "LastName", "Username", "IsBot", "IsPremium", "IsBotOwner"} };
-		Table Groups{ "Groups", {"Id", "Title", "Type", "IsBotAdmin", "IsBotActive"}};
+		Table Groups{ "Groups", {"Id", "Title", "UniqueTitle", "Type", "IsBotAdmin", "IsBotActive"}};
 
 		const vector<pair<string, const vector<string>>> tableAndcolumnNames{
 			{BotAdministrators.tableName, BotAdministrators.columnNames},

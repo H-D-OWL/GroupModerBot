@@ -11,15 +11,15 @@ BotController::BotController(BotDatabase& botDatabase, Bot& bot) : botDatabase(b
 		Log(LogSource::Program, LogType::Event, "confirmation code: " + confirmationCode);
 	}
 
-	bot.getEvents().onCommand		("start",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnStart(message); }); });
-	bot.getEvents().onCommand		("botActive",	[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnBotActive(message); }); });
-	bot.getEvents().onCommand		("botDeactive", [this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnBotDeactive(message); }); });
-	bot.getEvents().onCommand		("groups",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnGroups(message); }); });
-	bot.getEvents().onCommand		("ban",			[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnBan(message); }); });
-	bot.getEvents().onCommand		("unban",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnUnban(message); }); });
-	bot.getEvents().onCommand		("mute",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnMute(message); }); });
-	bot.getEvents().onCommand		("unmute",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnUnmute(message); }); });
-	bot.getEvents().onMyChatMember	(				[this](ChatMemberUpdated::Ptr update)	{ SafeExecute(ContextLog::ToContextLog(update,	"start"),	[&](){ return onMyChatMember(update); }); });
+	bot.getEvents().onCommand		("start",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),				[&](){ return OnStart(message); }); });
+	bot.getEvents().onCommand		("botActive",	[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "botActive"),			[&](){ return OnBotActive(message); }); });
+	bot.getEvents().onCommand		("botDeactive", [this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "botDeactive"),			[&](){ return OnBotDeactive(message); }); });
+	bot.getEvents().onCommand		("groups",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "groups"),				[&](){ return OnGroups(message); }); });
+	bot.getEvents().onCommand		("ban",			[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "ban"),					[&](){ return OnBan(message); }); });
+	bot.getEvents().onCommand		("unban",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "unban"),				[&](){ return OnUnban(message); }); });
+	bot.getEvents().onCommand		("mute",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "mute"),				[&](){ return OnMute(message); }); });
+	bot.getEvents().onCommand		("unmute",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "unmute"),				[&](){ return OnUnmute(message); }); });
+	bot.getEvents().onMyChatMember	(				[this](ChatMemberUpdated::Ptr update)	{ SafeExecute(ContextLog::ToContextLog(update,	"changeMyChatMember"),	[&](){ return onMyChatMember(update); }); });
 
 }
 
@@ -34,6 +34,26 @@ void BotController::Run()
 }
 
 OnEventResult BotController::OnStart(Message::Ptr message)
+{
+	if (message->chat->type == Chat::Type::Private)
+	{
+		if (botDatabase.GetNumberAdmins() == 0)
+			return { "call by possible owner", "Hello. I'm " + bot.getApi().getMe()->username + ". I don't have an owner yet. To become one, enter the /addBotAdmin command and the confirmation code from the console" };
+		else if(botDatabase.IsAdmin(message->from->id))
+		{
+			if (botDatabase.GetAdmin(message->from->id).isBotOwner)
+				return { "call from owner", "Template response for the owner (debug)" };
+			else
+				return { "сall from admin", "Template response for the admin (debug)" };
+		}
+		else
+			return { "сall from not admin", "Hello. I'm " + bot.getApi().getMe()->username + ". To become a bot admin, type the command /addBotAdmin and the confirmation code that the bot owner will provide you" };
+	}
+	else
+		return { "сall in non-private chat", "" };
+}
+
+/*OnEventResult BotController::OnStart(Message::Ptr message)
 {
 	if (message->chat->type == Chat::Type::Private)
 	{
@@ -62,7 +82,7 @@ OnEventResult BotController::OnStart(Message::Ptr message)
 	}
 	else
 		return {"сalling in a non-private chat", ""};
-}
+}*/
 
 OnEventResult BotController::OnBotActive(Message::Ptr message)
 {
@@ -70,6 +90,7 @@ OnEventResult BotController::OnBotActive(Message::Ptr message)
 		botDatabase.UpdateGroup(BotDatabase::Group{
 		.id				= message->chat->id,
 		.title			= message->chat->title,
+		.uniqueTitle	= (*botDatabase.GetGroups().find(message->chat->id)).second.uniqueTitle,
 		.type			= message->chat->type,
 		.isBotAdmin		= (*botDatabase.GetGroups().find(message->chat->id)).second.isBotAdmin,
 		.isBotActive	= true
@@ -85,6 +106,7 @@ OnEventResult BotController::OnBotDeactive(Message::Ptr message)
 		botDatabase.UpdateGroup(BotDatabase::Group{
 		.id				= message->chat->id,
 		.title			= message->chat->title,
+		.uniqueTitle = (*botDatabase.GetGroups().find(message->chat->id)).second.uniqueTitle,
 		.type			= message->chat->type,
 		.isBotAdmin		= (*botDatabase.GetGroups().find(message->chat->id)).second.isBotAdmin,
 		.isBotActive	= false
@@ -105,7 +127,7 @@ OnEventResult BotController::OnGroups(Message::Ptr message)
 		{
 			sendMessageText += to_string(number);
 			sendMessageText += ". ";
-			sendMessageText += group.title + ":\n    IsBotAdmin: " + (group.isBotAdmin ? "Yes" : "No") + "\n    " + "IsBotActive: " + (group.isBotActive ? "Yes" : "No");
+			sendMessageText += group.title + " (" + group.uniqueTitle + ")" + ":\n    IsBotAdmin: " + (group.isBotAdmin ? "Yes" : "No") + "\n    " + "IsBotActive: " + (group.isBotActive ? "Yes" : "No");
 			++number;
 		}
 
@@ -320,6 +342,7 @@ OnEventResult BotController::onMyChatMember(ChatMemberUpdated::Ptr update)
 		botDatabase.AddGroup(BotDatabase::Group{
 		.id				= update->chat->id,
 		.title			= update->chat->title,
+		.uniqueTitle	= RandomNumberGenerator(32),
 		.type			= update->chat->type,
 		.isBotAdmin		= status == "administrator",
 		.isBotActive	= false
@@ -330,6 +353,7 @@ OnEventResult BotController::onMyChatMember(ChatMemberUpdated::Ptr update)
 		botDatabase.UpdateGroup(BotDatabase::Group{
 		.id				= update->chat->id,
 		.title			= update->chat->title,
+		.uniqueTitle	= (*botDatabase.GetGroups().find(update->chat->id)).second.uniqueTitle,
 		.type			= update->chat->type,
 		.isBotAdmin		= status == "administrator",
 		.isBotActive	= (*botDatabase.GetGroups().find(update->chat->id)).second.isBotActive

@@ -57,26 +57,33 @@ bool BotDatabase::CacheLoad()
 	SQLite::Statement adminsQuery{ *botDatabase, "SELECT " + BotAdministrators.GetColumnNames() + " FROM " + BotAdministrators.tableName };
 
 	while (adminsQuery.executeStep())
+	{
+		size_t num{ 0 };
+
 		AddAdminToCache(Admin{
-		.id				= adminsQuery.getColumn(0).getInt64(),
-		.firstName		= adminsQuery.getColumn(1).getString(),
-		.lastName		= adminsQuery.getColumn(2).getString(),
-		.username		= adminsQuery.getColumn(3).getString(),
-		.isBot			= static_cast<bool>(adminsQuery.getColumn(4).getInt64()),
-		.isPremium		= static_cast<bool>(adminsQuery.getColumn(5).getInt64()),
-		.isBotOwner		= static_cast<bool>(adminsQuery.getColumn(6).getInt64())
+		.id = adminsQuery.getColumn(num++).getInt64(),
+		.firstName = adminsQuery.getColumn(num++).getString(),
+		.lastName = adminsQuery.getColumn(num++).getString(),
+		.username = adminsQuery.getColumn(num++).getString(),
+		.isBot = static_cast<bool>(adminsQuery.getColumn(num++).getInt64()),
+		.isPremium = static_cast<bool>(adminsQuery.getColumn(num++).getInt64()),
+		.isBotOwner = static_cast<bool>(adminsQuery.getColumn(num++).getInt64())
 			});
+	}
 
 	SQLite::Statement groupsQuery{ *botDatabase, "SELECT " + Groups.GetColumnNames() + " FROM " + Groups.tableName };
 
 	while (groupsQuery.executeStep())
 	{
+		size_t num{ 0 };
+
 		AddGroupToCache(Group{
-		.id				= groupsQuery.getColumn(0).getInt64(),
-		.title			= groupsQuery.getColumn(1).getString(),
-		.type			= static_cast<Chat::Type>(groupsQuery.getColumn(2).getInt64()),
-		.isBotAdmin		= static_cast<bool>(groupsQuery.getColumn(3).getInt64()),
-		.isBotActive	= static_cast<bool>(groupsQuery.getColumn(4).getInt64())
+		.id				= groupsQuery.getColumn(num++).getInt64(),
+		.title			= groupsQuery.getColumn(num++).getString(),
+		.uniqueTitle	= groupsQuery.getColumn(num++).getString(),
+		.type			= static_cast<Chat::Type>(groupsQuery.getColumn(num++).getInt64()),
+		.isBotAdmin		= static_cast<bool>(groupsQuery.getColumn(num++).getInt64()),
+		.isBotActive	= static_cast<bool>(groupsQuery.getColumn(num++).getInt64())
 			});
 	}
 
@@ -111,13 +118,15 @@ bool BotDatabase::AddAdmin(const Admin& member)
 
 	SQLite::Statement query{ *botDatabase, "INSERT INTO " + BotAdministrators.tableName + " (" + BotAdministrators.GetColumnNames() + ") VALUES(" + BotAdministrators.GetPlaceholders() + ')'};
 
-	query.bind(1, member.id);
-	query.bind(2, member.firstName);
-	query.bind(3, member.lastName);
-	query.bind(4, member.username);
-	query.bind(5, member.isBot);
-	query.bind(6, member.isPremium);
-	query.bind(7, !GetNumberAdmins());
+	size_t num{ 1 };
+
+	query.bind(num++, member.id);
+	query.bind(num++, member.firstName);
+	query.bind(num++, member.lastName);
+	query.bind(num++, member.username);
+	query.bind(num++, member.isBot);
+	query.bind(num++, member.isPremium);
+	query.bind(num++, !GetNumberAdmins());
 	query.exec();
 
 	AddAdminToCache(Admin{
@@ -140,16 +149,20 @@ bool BotDatabase::AddGroup(const Group& group)
 
 	SQLite::Statement queryToAddGroup{ *botDatabase, "INSERT INTO " + Groups.tableName + " (" + Groups.GetColumnNames() + ") VALUES(" + Groups.GetPlaceholders() + ')' };
 
-	queryToAddGroup.bind(1, group.id);
-	queryToAddGroup.bind(2, group.title);
-	queryToAddGroup.bind(3, static_cast<int64_t>(group.type));
-	queryToAddGroup.bind(4, static_cast<int64_t>(group.isBotAdmin));
-	queryToAddGroup.bind(5, static_cast<int64_t>(false));
+	size_t num{ 1 };
+
+	queryToAddGroup.bind(num++, group.id);
+	queryToAddGroup.bind(num++, group.title);
+	queryToAddGroup.bind(num++, group.uniqueTitle);
+	queryToAddGroup.bind(num++, static_cast<int64_t>(group.type));
+	queryToAddGroup.bind(num++, static_cast<int64_t>(group.isBotAdmin));
+	queryToAddGroup.bind(num++, static_cast<int64_t>(false));
 	queryToAddGroup.exec();
 
 	AddGroupToCache(Group{
 	.id				= group.id,
 	.title			= group.title,
+	.uniqueTitle	= group.uniqueTitle,
 	.type			= group.type,
 	.isBotAdmin		= group.isBotAdmin,
 	.isBotActive	= false 
@@ -160,7 +173,7 @@ bool BotDatabase::AddGroup(const Group& group)
 
 bool BotDatabase::UpdateGroup(const Group& group)
 {
-	botDatabase->exec("UPDATE " + Groups.tableName + " SET " + Groups.GetColumnsEqualValues({ to_string(group.id), group.title, to_string(static_cast<int64_t>(group.type)), to_string(static_cast<int64_t>(group.isBotAdmin)), to_string(group.isBotActive)}) + " WHERE " + Groups.columnNames[0] + " LIKE " + to_string(group.id));
+	botDatabase->exec("UPDATE " + Groups.tableName + " SET " + Groups.GetColumnsEqualValues({ to_string(group.id), group.title, group.uniqueTitle, to_string(static_cast<int64_t>(group.type)), to_string(static_cast<int64_t>(group.isBotAdmin)), to_string(group.isBotActive)}) + " WHERE " + Groups.columnNames[0] + " LIKE " + to_string(group.id));
 
 	UpdateGroupFromCache(group);
 
@@ -217,6 +230,7 @@ bool BotDatabase::UpdateGroupFromCache(const Group& group)
 	auto& cachedGroup = (*Cache.groups.find(group.id)).second;
 
 	cachedGroup.title = group.title;
+	cachedGroup.uniqueTitle = group.uniqueTitle;
 	cachedGroup.type = group.type;
 	cachedGroup.isBotAdmin = group.isBotAdmin;
 	cachedGroup.isBotActive = group.isBotActive;
@@ -247,7 +261,7 @@ string BotDatabase::Table::GetPlaceholders() const
 {
 	string Placeholders{};
 
-	for (auto a = 0; a < columnNames.size(); ++a)
+	for (auto i = 0; i < columnNames.size(); ++i)
 	{
 		Placeholders += "?,";
 	}

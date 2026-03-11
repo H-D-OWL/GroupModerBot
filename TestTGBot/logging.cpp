@@ -52,7 +52,7 @@ namespace logging
 		const bool isValidChat = message->chat != nullptr;
 
 		return ContextLog{
-			.userId		= isValidUser ? to_string(message->from->id) : "",
+			.userId		= isValidUser ? to_string(message->from->id) : "!",
 			.username	= isValidUser ? message->from->username : "",
 			.chatId		= isValidChat ? to_string(message->chat->id) : "",
 			.title		= isValidChat ? message->chat->title : "",
