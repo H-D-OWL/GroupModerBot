@@ -11,15 +11,15 @@ BotController::BotController(BotDatabase& botDatabase, Bot& bot) : botDatabase(b
 		Log(LogSource::Program, LogType::Event, "confirmation code: " + confirmationCode);
 	}
 
-	bot.getEvents().onCommand		("start",	[this](Message::Ptr message)			{ SafeExecute(message,	[&](){ OnStart(message); }); });
-	bot.getEvents().onCommand		("botActive", [this](Message::Ptr message)			{ SafeExecute(message,	[&](){ OnBotActive(message); }); });
-	bot.getEvents().onCommand		("botDeactive", [this](Message::Ptr message)		{ SafeExecute(message,	[&](){ OnBotDeactive(message); }); });
-	bot.getEvents().onCommand		("groups",	[this](Message::Ptr message)			{ SafeExecute(message,	[&](){ OnGroups(message); }); });
-	bot.getEvents().onCommand		("ban",		[this](Message::Ptr message)			{ SafeExecute(message,	[&](){ OnBan(message); }); });
-	bot.getEvents().onCommand		("unban",	[this](Message::Ptr message)			{ SafeExecute(message,	[&](){ OnUnban(message); }); });
-	bot.getEvents().onCommand		("mute",	[this](Message::Ptr message)			{ SafeExecute(message,	[&](){ OnMute(message); }); });
-	bot.getEvents().onCommand		("unmute",	[this](Message::Ptr message)			{ SafeExecute(message,	[&](){ OnUnmute(message); }); });
-	bot.getEvents().onMyChatMember	(			[this](ChatMemberUpdated::Ptr update)	{ SafeExecute(update,	[&](){ onMyChatMember(update); }); });
+	bot.getEvents().onCommand		("start",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnStart(message); }); });
+	bot.getEvents().onCommand		("botActive",	[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnBotActive(message); }); });
+	bot.getEvents().onCommand		("botDeactive", [this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnBotDeactive(message); }); });
+	bot.getEvents().onCommand		("groups",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnGroups(message); }); });
+	bot.getEvents().onCommand		("ban",			[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnBan(message); }); });
+	bot.getEvents().onCommand		("unban",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnUnban(message); }); });
+	bot.getEvents().onCommand		("mute",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnMute(message); }); });
+	bot.getEvents().onCommand		("unmute",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),	[&](){ return OnUnmute(message); }); });
+	bot.getEvents().onMyChatMember	(				[this](ChatMemberUpdated::Ptr update)	{ SafeExecute(ContextLog::ToContextLog(update,	"start"),	[&](){ return onMyChatMember(update); }); });
 
 }
 
@@ -28,10 +28,12 @@ void BotController::Run()
 	TgLongPoll longPoll(bot);
 
 	while (true)
-		longPoll.start();
+		SafeExecute(ContextLog{}, [&]() -> OnEventResult {
+		while (true) { longPoll.start(); }
+		return { "", "" }; });
 }
 
-void BotController::OnStart(Message::Ptr message)
+OnEventResult BotController::OnStart(Message::Ptr message)
 {
 	if (message->chat->type == Chat::Type::Private)
 	{
@@ -40,61 +42,58 @@ void BotController::OnStart(Message::Ptr message)
 		if (confirmationCode != "ERROR" && code == confirmationCode)
 		{
 			botDatabase.AddAdmin(BotDatabase::Admin{
-		.id = message->from->id,
-		.firstName = message->from->firstName,
-		.lastName = message->from->lastName,
-		.username = message->from->username,
-		.isBot = message->from->isBot,
-		.isPremium = message->from->isPremium,
-		.isBotOwner = true
+			.id			= message->from->id,
+			.firstName	= message->from->firstName,
+			.lastName	= message->from->lastName,
+			.username	= message->from->username,
+			.isBot		= message->from->isBot,
+			.isPremium	= message->from->isPremium,
+			.isBotOwner	= true
 				});
 
 			confirmationCode = "ERROR";
 
-			Log(LogSource::Bot, LogType::Event, "user: " + to_string(message->from->id) + ' ' + message->from->firstName + ' ' + message->from->lastName + " entered the correct confirmation code and became a moderator");
-			bot.getApi().sendMessage(message->chat->id, "You have become a moderator");
-
+			return { "confirmation code is correct", "You have become a bot admin" };
 		}
 		else if (confirmationCode != "ERROR" && !code.empty())
-		{
-			Log(LogSource::Bot, LogType::Error, "user: " + to_string(message->from->id) + " entered an incorrect confirmation code and did not become a moderator");
-
-			bot.getApi().sendMessage(message->chat->id, "The confirmation code is incorrect");
-
-		}
+			return { "confirmation code is incorrect", "The confirmation code is incorrect" };
+		else
+			return { "confirmation code not entered", (botDatabase.IsAdmin(message->from->id) ? "You are the bot admin" : "Enter confirmation code")};
 	}
 	else
-	{
-		throw runtime_error{ "start" };
-
-	}
+		return {"сalling in a non-private chat", ""};
 }
 
-void BotController::OnBotActive(Message::Ptr message)
+OnEventResult BotController::OnBotActive(Message::Ptr message)
 {
 	if (message->chat->type != Chat::Type::Private)
 		botDatabase.UpdateGroup(BotDatabase::Group{
-		.id = message->chat->id,
-		.title = message->chat->title,
-		.type = message->chat->type,
-		.isBotAdmin = (*botDatabase.GetGroups().find(message->chat->id)).second.isBotAdmin,
-		.isBotActive = true
+		.id				= message->chat->id,
+		.title			= message->chat->title,
+		.type			= message->chat->type,
+		.isBotAdmin		= (*botDatabase.GetGroups().find(message->chat->id)).second.isBotAdmin,
+		.isBotActive	= true
 			});
+
+	return { "test", "test" };
+
 }
 
-void BotController::OnBotDeactive(Message::Ptr message)
+OnEventResult BotController::OnBotDeactive(Message::Ptr message)
 {
 	if (message->chat->type != Chat::Type::Private)
 		botDatabase.UpdateGroup(BotDatabase::Group{
-		.id = message->chat->id,
-		.title = message->chat->title,
-		.type = message->chat->type,
-		.isBotAdmin = (*botDatabase.GetGroups().find(message->chat->id)).second.isBotAdmin,
-		.isBotActive = false
+		.id				= message->chat->id,
+		.title			= message->chat->title,
+		.type			= message->chat->type,
+		.isBotAdmin		= (*botDatabase.GetGroups().find(message->chat->id)).second.isBotAdmin,
+		.isBotActive	= false
 			});
+	return { "test", "test" };
+
 }
 
-void BotController::OnGroups(Message::Ptr message)
+OnEventResult BotController::OnGroups(Message::Ptr message)
 {
 	if (message->chat->type == Chat::Type::Private)
 	{
@@ -119,10 +118,11 @@ void BotController::OnGroups(Message::Ptr message)
 
 		bot.getApi().sendMessage(message->chat->id, sendMessageText);
 	}
+	return { "test", "test" };
 
 }
 
-void BotController::OnBan(Message::Ptr message)
+OnEventResult BotController::OnBan(Message::Ptr message)
 {
 	if (message->chat->type != Chat::Type::Private)
 	{
@@ -155,10 +155,11 @@ void BotController::OnBan(Message::Ptr message)
 			}
 		}
 	}
+	return { "test", "test" };
 
 }
 
-void BotController::OnUnban(Message::Ptr message)
+OnEventResult BotController::OnUnban(Message::Ptr message)
 {
 	if (message->chat->type != Chat::Type::Private)
 	{
@@ -177,10 +178,11 @@ void BotController::OnUnban(Message::Ptr message)
 			}
 		}
 	}
+	return { "test", "test" };
 
 }
 
-void BotController::OnMute(Message::Ptr message)
+OnEventResult BotController::OnMute(Message::Ptr message)
 {
 	if (message->chat->type != Chat::Type::Private)
 	{
@@ -206,16 +208,16 @@ void BotController::OnMute(Message::Ptr message)
 
 				ChatPermissions::Ptr permissions{ new ChatPermissions };
 
-				permissions->canSendMessages = false;
-				permissions->canSendOtherMessages = false;
-				permissions->canSendAudios = false;
-				permissions->canSendDocuments = false;
-				permissions->canSendPhotos = false;
-				permissions->canSendPolls = false;
-				permissions->canSendVideoNotes = false;
-				permissions->canSendVideos = false;
-				permissions->canSendVoiceNotes = false;
-				permissions->canAddWebPagePreviews = false;
+				permissions->canSendMessages		= false;
+				permissions->canSendOtherMessages	= false;
+				permissions->canSendAudios			= false;
+				permissions->canSendDocuments		= false;
+				permissions->canSendPhotos			= false;
+				permissions->canSendPolls			= false;
+				permissions->canSendVideoNotes		= false;
+				permissions->canSendVideos			= false;
+				permissions->canSendVoiceNotes		= false;
+				permissions->canAddWebPagePreviews	= false;
 
 				if (bot.getApi().restrictChatMember(message->replyToMessage->chat->id, message->replyToMessage->from->id, permissions, untilTimestamp))
 				{
@@ -226,9 +228,11 @@ void BotController::OnMute(Message::Ptr message)
 			}
 		}
 	}
+	return { "test", "test" };
+
 }
 
-void BotController::OnUnmute(Message::Ptr message)
+OnEventResult BotController::OnUnmute(Message::Ptr message)
 {
 	if (message->chat->type != Chat::Type::Private)
 	{
@@ -240,16 +244,16 @@ void BotController::OnUnmute(Message::Ptr message)
 			{
 				ChatPermissions::Ptr permissions{ new ChatPermissions };
 
-				permissions->canSendMessages = true;
-				permissions->canSendOtherMessages = true;
-				permissions->canSendAudios = true;
-				permissions->canSendDocuments = true;
-				permissions->canSendPhotos = true;
-				permissions->canSendPolls = true;
-				permissions->canSendVideoNotes = true;
-				permissions->canSendVideos = true;
-				permissions->canSendVoiceNotes = true;
-				permissions->canAddWebPagePreviews = true;
+				permissions->canSendMessages		= true;
+				permissions->canSendOtherMessages	= true;
+				permissions->canSendAudios			= true;
+				permissions->canSendDocuments		= true;
+				permissions->canSendPhotos			= true;
+				permissions->canSendPolls			= true;
+				permissions->canSendVideoNotes		= true;
+				permissions->canSendVideos			= true;
+				permissions->canSendVoiceNotes		= true;
+				permissions->canAddWebPagePreviews	= true;
 
 				if (bot.getApi().restrictChatMember(message->replyToMessage->chat->id, message->replyToMessage->from->id, permissions))
 				{
@@ -260,15 +264,16 @@ void BotController::OnUnmute(Message::Ptr message)
 			}
 		}
 	}
+	return { "test", "test" };
 
 }
 
-void BotController::OnNonCommand(Message::Ptr message)
+OnEventResult BotController::OnNonCommand(Message::Ptr message)
 {
-	const auto dataBot = bot.getApi().getMe();
-	const string messageText = message->text;
-	const Chat::Type chatType = message->chat->type;
-	const int64_t chatId = message->chat->id;
+	const auto dataBot			= bot.getApi().getMe();
+	const string messageText	= message->text;
+	const Chat::Type chatType	= message->chat->type;
+	const int64_t chatId		= message->chat->id;
 
 	if (isSystemMessage(message))
 	{
@@ -301,9 +306,11 @@ void BotController::OnNonCommand(Message::Ptr message)
 			break;
 		}
 	}
+	return { "test", "test" };
+
 }
 
-void BotController::onMyChatMember(ChatMemberUpdated::Ptr update)
+OnEventResult BotController::onMyChatMember(ChatMemberUpdated::Ptr update)
 {
 	const bool isContains = botDatabase.GetGroups().contains(update->chat->id);
 	const string status = update->newChatMember->status;
@@ -311,51 +318,53 @@ void BotController::onMyChatMember(ChatMemberUpdated::Ptr update)
 	if (!isContains && (status == "member" || status == "administrator"))
 	{
 		botDatabase.AddGroup(BotDatabase::Group{
-		.id = update->chat->id,
-		.title = update->chat->title,
-		.type = update->chat->type,
-		.isBotAdmin = status == "administrator",
-		.isBotActive = false
+		.id				= update->chat->id,
+		.title			= update->chat->title,
+		.type			= update->chat->type,
+		.isBotAdmin		= status == "administrator",
+		.isBotActive	= false
 			});
 	}
 	else if (isContains && (status == "member" || status == "administrator"))
 	{
 		botDatabase.UpdateGroup(BotDatabase::Group{
-		.id = update->chat->id,
-		.title = update->chat->title,
-		.type = update->chat->type,
-		.isBotAdmin = status == "administrator",
-		.isBotActive = (*botDatabase.GetGroups().find(update->chat->id)).second.isBotActive
+		.id				= update->chat->id,
+		.title			= update->chat->title,
+		.type			= update->chat->type,
+		.isBotAdmin		= status == "administrator",
+		.isBotActive	= (*botDatabase.GetGroups().find(update->chat->id)).second.isBotActive
 			});
 	}
 	else if (isContains && (status == "left" || status == "kicked"))
 	{
 		botDatabase.DeleteGroup(update->chat->id);
 	}
+	return { "test", "test" };
+
 }
 
 bool BotController::isSystemMessage(const Message::Ptr& message)
 {
 	return (
-		!message->newChatMembers.empty()	||
-		message->leftChatMember != nullptr	||
-		!message->newChatTitle.empty()		||
-		!message->newChatPhoto.empty()		||
-		message->deleteChatPhoto			||
-		message->groupChatCreated			||
-		message->supergroupChatCreated		||
-		message->channelChatCreated			||
-		message->migrateToChatId != 0		||
-		message->migrateFromChatId != 0		||
-		message->pinnedMessage != nullptr			
+			!message->newChatMembers.empty()	
+		||	message->leftChatMember != nullptr
+		||	!message->newChatTitle.empty()
+		||	!message->newChatPhoto.empty()
+		||	message->deleteChatPhoto	
+		||	message->groupChatCreated	
+		||	message->supergroupChatCreated
+		||	message->channelChatCreated	
+		||	message->migrateToChatId != 0
+		||	message->migrateFromChatId != 0
+		||	message->pinnedMessage != nullptr			
 		);
 }
 
-string BotController::RandomNumberGenerator(const size_t numberOfNumbers)
+string BotController::RandomNumberGenerator(const size_t length)
 {
 	string number;
 
-	for (auto a = 0; a < numberOfNumbers; ++a)
+	for (auto a = 0; a < length; ++a)
 	{
 		number += uniform_dist(dre);
 	}

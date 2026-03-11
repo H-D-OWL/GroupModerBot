@@ -4,16 +4,10 @@
 #include "logging.h"
 #include <random>
 #include <tgbot/tgbot.h>
-#include <concepts>
 
 using namespace std;
 using namespace TgBot;
-
-template<typename T>
-concept TelegramData = requires(T a) {
-	{ a->from->id } -> std::convertible_to<int64_t>;
-	{ a->chat->id } -> std::convertible_to<int64_t>;
-};
+using namespace logging;
 
 class BotController
 {
@@ -24,84 +18,74 @@ public:
 
 private:
 
-	void OnStart(Message::Ptr message);
-	void OnBotActive(Message::Ptr message);
-	void OnBotDeactive(Message::Ptr message);
-	void OnGroups(Message::Ptr message);
-	void OnBan(Message::Ptr message);
-	void OnUnban(Message::Ptr message);
-	void OnMute(Message::Ptr message);
-	void OnUnmute(Message::Ptr message);
-	void OnNonCommand(Message::Ptr message);
-	void onMyChatMember(ChatMemberUpdated::Ptr update);
-
-	template<TelegramData T, typename Func>
-	void SafeExecute(const T& data, const Func f) 
+	OnEventResult OnStart(Message::Ptr message);
+	OnEventResult OnBotActive(Message::Ptr message);
+	OnEventResult OnBotDeactive(Message::Ptr message);
+	OnEventResult OnGroups(Message::Ptr message);
+	OnEventResult OnBan(Message::Ptr message);
+	OnEventResult OnUnban(Message::Ptr message);
+	OnEventResult OnMute(Message::Ptr message);
+	OnEventResult OnUnmute(Message::Ptr message);
+	OnEventResult OnNonCommand(Message::Ptr message);
+	OnEventResult onMyChatMember(ChatMemberUpdated::Ptr update);
+	
+	//Provides protection against any exceptions. Logs any exceptions that occur or the correct execution of code.
+	template<typename Func>
+	void SafeExecute(const ContextLog& contextLog, const Func func) noexcept
 	{
-		string context = "[User: " + to_string(data->from->id) + " (" + (!data->from->username.empty() ? "@" + data->from->username : '\0') + ") | " + "Chat: " + to_string(data->chat->id) + " (" + data->chat->title + ")] ";
+		auto SafelySendMessage = [this](const string& userId, const string& textMessage) noexcept
+			{
+				try
+				{
+					bot.getApi().sendMessage(userId, textMessage);
+				}
+				catch (...)
+				{
+
+				}
+			};
 
 		try
 		{
-			f();
+			const OnEventResult onEventResult = func();
+
+			if (!onEventResult.logText.empty())
+				Log(LogSource::Program, LogType::Event, contextLog, onEventResult.logText);
+
+			if (!onEventResult.messageText.empty())
+				SafelySendMessage(contextLog.userId, onEventResult.messageText.data());
 		}
 		catch (const SQLite::Exception& e)
 		{
-			Log(LogSource::Database, LogType::Error, context + e.what());
+			Log(LogSource::Database, LogType::Error, contextLog, e.what());
 
-			try
-			{
-				bot.getApi().sendMessage(data->from->id, "Произошла ошибка в базой данных: " + string{ e.what() });
-			}
-			catch (...)
-			{
-
-			}
+			SafelySendMessage(contextLog.userId, "Database error: " + string{ e.what() });
 		}
 		catch (const TgException& e)
 		{
-			Log(LogSource::Bot, LogType::Error, context + e.what());
-
-			try
-			{
-				bot.getApi().sendMessage(data->from->id, "Произошла ошибка с Telegram: " + string{ e.what() });
-			}
-			catch (...)
-			{
-
-			}
+			Log(LogSource::Bot, LogType::Error, contextLog, e.what());
+			
+			SafelySendMessage(contextLog.userId, "Telegram error: " + string{ e.what() });
 		}
 		catch (const exception& e)
 		{
-			Log(LogSource::Program, LogType::Error, context + e.what());
-
-			try
-			{
-				bot.getApi().sendMessage(data->from->id, "Произошла ошибка: " + string{ e.what() });
-			}
-			catch (...)
-			{
-
-			}
+			Log(LogSource::Program, LogType::Error, contextLog, e.what());
+			
+			SafelySendMessage(contextLog.userId, "Program error: " + string{ e.what() });
 		}
 		catch (...)
 		{
-			Log(LogSource::Program, LogType::Error, "unknown error");
-
-			try
-			{
-				bot.getApi().sendMessage(data->from->id, "Произошла неизвестная ошибка.");
-			}
-			catch (...)
-			{
-
-			}
+			Log(LogSource::Program, LogType::Error, contextLog, "unknown error");
+			
+			SafelySendMessage(contextLog.userId, "Unknown error");
 		}
-
 	}
 
+	//Checks if the message is a system message.
 	bool isSystemMessage(const Message::Ptr& message);
 
-	string RandomNumberGenerator(const size_t numberOfNumbers);
+	//Generates a string of random characters from 0 to 9 of the specified length.
+	string RandomNumberGenerator(const size_t length);
 	random_device rd;
 	default_random_engine dre{ rd() };
 	uniform_int_distribution<int> uniform_dist{ '0', '9' };

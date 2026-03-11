@@ -121,12 +121,12 @@ bool BotDatabase::AddAdmin(const Admin& member)
 	query.exec();
 
 	AddAdminToCache(Admin{
-	.id = member.id,
-	.firstName = member.firstName,
-	.lastName = member.lastName,
-	.username = member.username,
-	.isBot = member.isBot,
-	.isPremium = member.isPremium,
+	.id			= member.id,
+	.firstName	= member.firstName,
+	.lastName	= member.lastName,
+	.username	= member.username,
+	.isBot		= member.isBot,
+	.isPremium	= member.isPremium,
 	.isBotOwner = !GetNumberAdmins()
 		});
 
@@ -148,11 +148,11 @@ bool BotDatabase::AddGroup(const Group& group)
 	queryToAddGroup.exec();
 
 	AddGroupToCache(Group{
-	.id = group.id,
-	.title = group.title,
-	.type = group.type,
-	.isBotAdmin = group.isBotAdmin,
-	.isBotActive = false 
+	.id				= group.id,
+	.title			= group.title,
+	.type			= group.type,
+	.isBotAdmin		= group.isBotAdmin,
+	.isBotActive	= false 
 		});
 
 	return true;

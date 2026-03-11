@@ -25,7 +25,7 @@ database
 
 /*
 *	1. Create and configure full-fledged data warehouses for groups and users (from March 1, 2026 - 2 days) (completed in 2 days)
-* 
+*	2. Rename the project and upload it to GitHub (starts March 3 - 1 day)
 * 
 * 
 * 
@@ -42,13 +42,15 @@ int main()
 	{
 		SetConsoleOutputCP(CP_UTF8);
 		SetConsoleCP(CP_UTF8);
-
+		
+		///
+		
 		ifstream fileDataForBot("DataForBot.txt", ios_base::in);
 
 		if (!fileDataForBot.is_open())
 			throw runtime_error{ "file \"DataForBot.txt\" not found" };
 
-		Log(LogSource::Program, LogType::Error, "file \"DataForBot.txt\" found");
+		Log(LogSource::Program, LogType::Event, "file \"DataForBot.txt\" found");
 
 		string dbPath{ "ERROR" }, botToken{ "ERROR" };
 
@@ -64,25 +66,29 @@ int main()
 		}
 
 		fileDataForBot.close();
-
+		
+		///
+		
 		BotDatabase botDatabase;
 
 		botDatabase.Open(dbPath);
-		Log(LogSource::Database, LogType::Event, "database: " + dbPath.substr(dbPath.rfind('\\') + 1) + " found");
+		Log(LogSource::Database, LogType::Event, "database: \"" + dbPath.substr(dbPath.rfind('\\') + 1) + "\" found");
 
 		botDatabase.CheckStructure();
-		Log(LogSource::Database, LogType::Event, "database: " + dbPath.substr(dbPath.rfind('\\') + 1) + " has necessary structure");
+		Log(LogSource::Database, LogType::Event, "database: \"" + dbPath.substr(dbPath.rfind('\\') + 1) + "\" has necessary structure");
 
 		botDatabase.CacheLoad();
-		Log(LogSource::Database, LogType::Event, "data from database: " + dbPath.substr(dbPath.rfind('\\') + 1) + " has been loaded into cache");
-
+		Log(LogSource::Database, LogType::Event, "data from database: \"" + dbPath.substr(dbPath.rfind('\\') + 1) + "\" has been loaded into cache");
+		
+		///
+		
 		Bot bot(botToken);
 
 		if (bot.getToken().empty())
 			throw runtime_error{ "botToken is invalid" };
 
 		BotController botController{ botDatabase, bot };
-		Log(LogSource::Bot, LogType::Event, "bot: " + bot.getApi().getMe()->username + " has been launched");
+		Log(LogSource::Bot, LogType::Event, "bot: \"" + bot.getApi().getMe()->username + "\" has been launched");
 
 		botController.Run();
 	}
