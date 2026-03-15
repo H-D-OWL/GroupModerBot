@@ -1,6 +1,6 @@
 ﻿#include "BotController.h"
 
-BotController::BotController(BotDatabase& botDatabase, Bot& bot) : botDatabase(botDatabase), bot(bot)
+BotController::BotController(Bot& bot, BotDatabase& botDatabase) : bot(bot), botDatabase(botDatabase)
 {
 	if(!botDatabase.GetNumberAdmins())
 	{
@@ -11,15 +11,18 @@ BotController::BotController(BotDatabase& botDatabase, Bot& bot) : botDatabase(b
 		Log(LogSource::Program, LogType::Event, "confirmation code: " + confirmationCode);
 	}
 
-	bot.getEvents().onCommand		("start",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),				[&](){ return OnStart(message); }); });
-	bot.getEvents().onCommand		("botActive",	[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "botActive"),			[&](){ return OnBotActive(message); }); });
-	bot.getEvents().onCommand		("botDeactive", [this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "botDeactive"),			[&](){ return OnBotDeactive(message); }); });
-	bot.getEvents().onCommand		("groups",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "groups"),				[&](){ return OnGroups(message); }); });
-	bot.getEvents().onCommand		("ban",			[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "ban"),					[&](){ return OnBan(message); }); });
-	bot.getEvents().onCommand		("unban",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "unban"),				[&](){ return OnUnban(message); }); });
-	bot.getEvents().onCommand		("mute",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "mute"),				[&](){ return OnMute(message); }); });
-	bot.getEvents().onCommand		("unmute",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "unmute"),				[&](){ return OnUnmute(message); }); });
-	bot.getEvents().onMyChatMember	(				[this](ChatMemberUpdated::Ptr update)	{ SafeExecute(ContextLog::ToContextLog(update,	"changeMyChatMember"),	[&](){ return onMyChatMember(update); }); });
+	bot.getEvents().onCommand("start",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),				[&](){ return OnStart(message); }); });
+	bot.getEvents().onCommand("botActive",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "botActive"),			[&](){ return OnBotActive(message); }); });
+	bot.getEvents().onCommand("botDeactive",			[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "botDeactive"),			[&](){ return OnBotDeactive(message); }); });
+	bot.getEvents().onCommand("groups",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "groups"),				[&](){ return OnGroups(message); }); });
+	bot.getEvents().onCommand("setGroupUniqueTitle",	[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "setGroupUniqueTitle"),	[&](){ return OnSetGroupUniqueTitle(message); }); });
+	
+	bot.getEvents().onCommand("ban",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "ban"),					[&](){ return OnBan(message); }); });
+	bot.getEvents().onCommand("unban",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "unban"),				[&](){ return OnUnban(message); }); });
+	bot.getEvents().onCommand("mute",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "mute"),				[&](){ return OnMute(message); }); });
+	bot.getEvents().onCommand("unmute",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "unmute"),				[&](){ return OnUnmute(message); }); });
+	
+	bot.getEvents().onMyChatMember	(					[this](ChatMemberUpdated::Ptr update)	{ SafeExecute(ContextLog::ToContextLog(update,	"changeMyChatMember"),	[&](){ return onMyChatMember(update); }); });
 
 }
 
@@ -133,7 +136,7 @@ OnEventResult BotController::OnGroups(Message::Ptr message)
 
 		if (number == 1)
 		{
-			sendMessageText = "Групп нет";
+			sendMessageText = "There are no groups";
 		}
 
 		Log(LogSource::Bot, LogType::Event, "user: " + to_string(message->from->id) + ' ' + message->from->firstName + ' ' + message->from->lastName + " looked at the groups in which the bot operates");
@@ -142,6 +145,14 @@ OnEventResult BotController::OnGroups(Message::Ptr message)
 	}
 	return { "test", "test" };
 
+}
+
+OnEventResult BotController::OnSetGroupUniqueTitle(Message::Ptr message)
+{
+	string commandParameters = message->text.substr(string_view("/setGroupUniqueTitle ").size());
+
+
+	return { commandParameters, "test" };
 }
 
 OnEventResult BotController::OnBan(Message::Ptr message)
@@ -169,7 +180,7 @@ OnEventResult BotController::OnBan(Message::Ptr message)
 				time_t untilTimestamp = chrono::system_clock::to_time_t(untilTimePoint);
 
 
-				if (bot.getApi().banChatMember(message->replyToMessage->chat->id, message->replyToMessage->from->id, untilTimestamp))
+				if (bot.getApi().banChatMember(message->replyToMessage->chat->id, message->replyToMessage->from->id, static_cast<int32_t>(untilTimestamp)))
 				{
 					Log(LogSource::Bot, LogType::Event, "User banned for " + to_string(banDurationInHours.count()) + " hours " + to_string(banDurationInMinutes.count()) + " minutes");
 					bot.getApi().sendMessage(message->chat->id, "The user has been banned for " + to_string(banDurationInHours.count()) + " hours  " + to_string(banDurationInMinutes.count()) + " minutes");
@@ -388,9 +399,9 @@ string BotController::RandomNumberGenerator(const size_t length)
 {
 	string number;
 
-	for (auto a = 0; a < length; ++a)
+	for (size_t a = 0; a < length; ++a)
 	{
-		number += uniform_dist(dre);
+		number += static_cast<char>(uniform_dist(dre));
 	}
 
 	return number;

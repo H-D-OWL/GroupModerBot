@@ -3,49 +3,6 @@
   - add -D_WIN32_WINNT=0x0601 to the compiler command line; or
   - add _WIN32_WINNT=0x0601 to your project's Preprocessor Definitions.
   Assuming _WIN32_WINNT=0x0601 (i.e. Windows 7 target).
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotController.cpp(172,106): warning C4244: 'argument': conversion from 'time_t' to 'int32_t', possible loss of data
-  BotDatabase.cpp
-  Please define _WIN32_WINNT or _WIN32_WINDOWS appropriately. For example:
-  - add -D_WIN32_WINNT=0x0601 to the compiler command line; or
-  - add _WIN32_WINNT=0x0601 to your project's Preprocessor Definitions.
-  Assuming _WIN32_WINNT=0x0601 (i.e. Windows 7 target).
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(64,34): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(65,41): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(66,40): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(67,40): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(68,55): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(69,59): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(70,60): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(81,37): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(82,39): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(83,43): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(84,62): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(85,61): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(86,61): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(123,16): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(124,16): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(125,16): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(126,16): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(127,16): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(128,16): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(129,16): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(154,26): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(155,26): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(156,26): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(157,26): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(158,26): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-C:\Users\Dima02\Desktop\C++\TestTGBot\TestTGBot\BotDatabase.cpp(159,26): warning C4267: 'argument': conversion from 'size_t' to 'const int', possible loss of data
-  TestTGBot.cpp
-  Please define _WIN32_WINNT or _WIN32_WINDOWS appropriately. For example:
-  - add -D_WIN32_WINNT=0x0601 to the compiler command line; or
-  - add _WIN32_WINNT=0x0601 to your project's Preprocessor Definitions.
-  Assuming _WIN32_WINNT=0x0601 (i.e. Windows 7 target).
-  logging.cpp
-  Please define _WIN32_WINNT or _WIN32_WINDOWS appropriately. For example:
-  - add -D_WIN32_WINNT=0x0601 to the compiler command line; or
-  - add _WIN32_WINNT=0x0601 to your project's Preprocessor Definitions.
-  Assuming _WIN32_WINNT=0x0601 (i.e. Windows 7 target).
-  Generating Code...
   TestTGBot.vcxproj -> C:\Users\Dima02\Desktop\C++\TestTGBot\x64\Debug\TestTGBot.exe
   'pwsh.exe' is not recognized as an internal or external command,
   operable program or batch file.

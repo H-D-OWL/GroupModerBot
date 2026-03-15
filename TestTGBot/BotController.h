@@ -1,9 +1,12 @@
 ﻿#pragma once
+
+#include <random>
 #include <string>
+
+#include <tgbot/tgbot.h>
+
 #include "BotDatabase.h"
 #include "logging.h"
-#include <random>
-#include <tgbot/tgbot.h>
 
 using namespace std;
 using namespace TgBot;
@@ -13,7 +16,7 @@ class BotController
 {
 public:
 
-	explicit BotController(BotDatabase& botDatabase, Bot& bot);
+	explicit BotController(Bot& bot, BotDatabase& botDatabase);
 	void Run();
 
 private:
@@ -22,10 +25,13 @@ private:
 	OnEventResult OnBotActive(Message::Ptr message);
 	OnEventResult OnBotDeactive(Message::Ptr message);
 	OnEventResult OnGroups(Message::Ptr message);
+	OnEventResult OnSetGroupUniqueTitle(Message::Ptr message);
+
 	OnEventResult OnBan(Message::Ptr message);
 	OnEventResult OnUnban(Message::Ptr message);
 	OnEventResult OnMute(Message::Ptr message);
 	OnEventResult OnUnmute(Message::Ptr message);
+
 	OnEventResult OnNonCommand(Message::Ptr message);
 	OnEventResult onMyChatMember(ChatMemberUpdated::Ptr update);
 	
@@ -41,7 +47,7 @@ private:
 				}
 				catch (...)
 				{
-
+					//
 				}
 			};
 

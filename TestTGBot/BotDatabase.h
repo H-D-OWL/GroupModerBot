@@ -1,14 +1,16 @@
 ﻿#pragma once
 
 #include <iostream>
-#include <vector>
-#include <string_view>
-#include <tgbot/tgbot.h>
-#include "logging.h"
-#include <SQLiteCpp/SQLiteCpp.h>
 #include <string>
-#include <unordered_set>
+#include <string_view>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+#include <SQLiteCpp/SQLiteCpp.h>
+#include <tgbot/tgbot.h>
+
+#include "logging.h"
 
 using namespace std;
 using namespace TgBot;
@@ -42,7 +44,7 @@ using namespace logging;
 
 
 		bool isTableEmpty(const string& tableName) const;
-		bool TableHasColumn(const string& tableName, const string& columnName) const;
+		bool TableHasColumn(const string_view tableName, const string_view columnName) const;
 		
 		Admin GetAdmin(const int64_t memberId) const;
 		bool IsAdmin(const int64_t memberId) const;
@@ -74,23 +76,48 @@ using namespace logging;
 
 		struct Table
 		{
-			const string tableName{};
-			const vector<string> columnNames{};
+			const string_view nameTable;
+			const vector<string_view> columnNames;
 
-			string GetColumnNames() const;
+			string GetColumnNamesBetweenCommas() const;
 			string GetPlaceholders() const;
-			string GetColumnsEqualValues(const vector<string> values) const;
+			string GetColumnsEqualValues(const vector<string>& values) const;
+		};
+
+		struct GroupsTable : Table
+		{
+			static constexpr string_view idColumnName			= "Id";
+			static constexpr string_view titleColumnName		= "Title";
+			static constexpr string_view uniqueTitleColumnName	= "UniqueTitle";
+			static constexpr string_view typeColumnName			= "Type";
+			static constexpr string_view isBotAdminColumnName	= "IsBotAdmin";
+			static constexpr string_view isBotActiveColumnName	= "IsBotActive";
+
+			GroupsTable() : Table{ "Groups", {idColumnName, titleColumnName, uniqueTitleColumnName, typeColumnName, isBotAdminColumnName, isBotActiveColumnName} } {};
+		};
+
+		struct BotAdminsTable : Table
+		{
+			static constexpr string_view idColumnName			= "Id";
+			static constexpr string_view firstNameColumnName	= "FirstName";
+			static constexpr string_view lastNameColumnName		= "LastName";
+			static constexpr string_view usernameColumnName		= "Username";
+			static constexpr string_view isBotColumnName		= "IsBot";
+			static constexpr string_view isPremiumColumnName	= "IsPremium";
+			static constexpr string_view isBotOwnerColumnName	= "IsBotOwner";
+			
+			BotAdminsTable() : Table{ "BotAdmins", {idColumnName, firstNameColumnName, lastNameColumnName, usernameColumnName, isBotColumnName, isPremiumColumnName, isBotOwnerColumnName} } {};
+		};
+
+		inline static const BotAdminsTable BotAdmins{};
+		inline static const GroupsTable Groups{};
+
+		const vector<const Table*> tables{
+			&BotAdmins,
+			&Groups
 		};
 
 		unique_ptr<SQLite::Database> botDatabase;
-
-		Table BotAdministrators{ "BotAdministrators", {"Id", "FirstName", "LastName", "Username", "IsBot", "IsPremium", "IsBotOwner"} };
-		Table Groups{ "Groups", {"Id", "Title", "UniqueTitle", "Type", "IsBotAdmin", "IsBotActive"}};
-
-		const vector<pair<string, const vector<string>>> tableAndcolumnNames{
-			{BotAdministrators.tableName, BotAdministrators.columnNames},
-			{Groups.tableName, Groups.columnNames},
-		};
 
 		Cache Cache;
 	};

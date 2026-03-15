@@ -1,17 +1,15 @@
-﻿#include <iostream>
-#include <stdio.h>
-#include <tgbot/tgbot.h>
-#include <string>
-#include <vector>
+﻿#define WIN32_LEAN_AND_MEAN
+
+#include <windows.h>
 #include <fstream>
+#include <string>
+
+#include <tgbot/tgbot.h>
 #include <SQLiteCpp/SQLiteCpp.h>
-#include <memory>
-#include <unordered_map>
-#include <random>
-#include "logging.h"
-#include <chrono>
-#include "BotDatabase.h"
+
 #include "BotController.h"
+#include "BotDatabase.h"
+#include "logging.h"
 
 /*
 * 	1. Obtaining a token and database path from the DataForBot.txt file.
@@ -21,15 +19,6 @@
 * 	5. Using group commands (ban, mute, disable chat, etc.).
 database
 
-*/
-
-/*
-*	1. Create and configure full-fledged data warehouses for groups and users (from March 1, 2026 - 2 days) (completed in 2 days)
-*	2. Rename the project and upload it to GitHub (starts March 3 - 1 day)
-* 
-* 
-* 
-* 
 */
 
 using namespace std;
@@ -42,8 +31,6 @@ int main()
 	{
 		SetConsoleOutputCP(CP_UTF8);
 		SetConsoleCP(CP_UTF8);
-		
-		///
 		
 		ifstream fileDataForBot("DataForBot.txt", ios_base::in);
 
@@ -59,10 +46,14 @@ int main()
 			string fileLine{};
 			getline(fileDataForBot, fileLine);
 
-			if (const auto off = fileLine.find("DbPath="); off != string::npos)
-				dbPath = fileLine.substr(off + 7);
-			else if (const auto off = fileLine.find("BotToken="); off != string::npos)
-				botToken = fileLine.substr(off + 9);
+			if (const auto offDbPath = fileLine.find("DbPath="); offDbPath != string::npos)
+			{
+				dbPath = fileLine.substr(offDbPath + 7);
+			}
+			else if (const auto offBotToken = fileLine.find("BotToken="); offBotToken != string::npos)
+			{
+				botToken = fileLine.substr(offBotToken + 9);
+			}
 		}
 
 		fileDataForBot.close();
@@ -87,7 +78,7 @@ int main()
 		if (bot.getToken().empty())
 			throw runtime_error{ "botToken is invalid" };
 
-		BotController botController{ botDatabase, bot };
+		BotController botController{ bot, botDatabase };
 		Log(LogSource::Bot, LogType::Event, "bot: \"" + bot.getApi().getMe()->username + "\" has been launched");
 
 		botController.Run();

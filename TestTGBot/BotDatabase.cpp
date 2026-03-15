@@ -1,8 +1,5 @@
 ﻿#include "BotDatabase.h"
 
-
-
-
 BotDatabase::BotDatabase()
 {
 }
@@ -19,7 +16,7 @@ const unique_ptr<SQLite::Database>& BotDatabase::Get() const
 bool BotDatabase::Open(const string& pathToDatabase)
 {
 	if(pathToDatabase.empty())
-		throw SQLite::Exception("database is already open");
+		throw SQLite::Exception("pathToDatabase is empty");
 
 	if (botDatabase)
 		throw SQLite::Exception("database is already open");
@@ -31,21 +28,21 @@ bool BotDatabase::Open(const string& pathToDatabase)
 
 bool BotDatabase::CheckStructure() const
 {
-	for (const auto& data : tableAndcolumnNames)
+	for (const auto& table : tables)
 	{
-		if (botDatabase->tableExists(data.first))
+		if (botDatabase->tableExists(string(table->nameTable)))
 		{
-			for (const auto& column : data.second)
+			for (const string_view column : table->columnNames)
 			{
-				if (!TableHasColumn(data.first, column))
+				if (!TableHasColumn(table->nameTable, column))
 				{
-					throw SQLite::Exception("table " + data.first + " has no column named " + column);
+					throw SQLite::Exception("table " + string(table->nameTable) + " has no column named " + string(column));
 				}
 			}
 		}
 		else
 		{
-			throw SQLite::Exception("no such table: " + data.first);
+			throw SQLite::Exception("no such table: " + string(table->nameTable));
 		}
 	}
 
@@ -54,11 +51,11 @@ bool BotDatabase::CheckStructure() const
 
 bool BotDatabase::CacheLoad()
 {
-	SQLite::Statement adminsQuery{ *botDatabase, "SELECT " + BotAdministrators.GetColumnNames() + " FROM " + BotAdministrators.tableName };
+	SQLite::Statement adminsQuery{ *botDatabase, "SELECT " + BotAdmins.GetColumnNamesBetweenCommas() + " FROM " + string(BotAdmins.nameTable) };
 
 	while (adminsQuery.executeStep())
 	{
-		size_t num{ 0 };
+		int num{ 0 };
 
 		AddAdminToCache(Admin{
 		.id = adminsQuery.getColumn(num++).getInt64(),
@@ -71,11 +68,11 @@ bool BotDatabase::CacheLoad()
 			});
 	}
 
-	SQLite::Statement groupsQuery{ *botDatabase, "SELECT " + Groups.GetColumnNames() + " FROM " + Groups.tableName };
+	SQLite::Statement groupsQuery{ *botDatabase, "SELECT " + Groups.GetColumnNamesBetweenCommas() + " FROM " + string(Groups.nameTable) };
 
 	while (groupsQuery.executeStep())
 	{
-		size_t num{ 0 };
+		int num{ 0 };
 
 		AddGroupToCache(Group{
 		.id				= groupsQuery.getColumn(num++).getInt64(),
@@ -97,9 +94,9 @@ bool BotDatabase::isTableEmpty(const string& tableName) const
 	return !query.executeStep();
 }
 
-bool BotDatabase::TableHasColumn(const string& tableName, const string& columnName) const
+bool BotDatabase::TableHasColumn(const string_view tableName, const string_view columnName) const
 {
-	SQLite::Statement query(*botDatabase, "PRAGMA table_info(" + tableName + ")");
+	SQLite::Statement query(*botDatabase, "PRAGMA table_info(" + string(tableName) + ")");
 
 	while (query.executeStep())
 		if (query.getColumn(1).getText() == columnName)
@@ -116,9 +113,9 @@ bool BotDatabase::AddAdmin(const Admin& member)
 	if (IsAdmin(member.id))
 		throw runtime_error{ "User " + member.username + " is already an administrator" };
 
-	SQLite::Statement query{ *botDatabase, "INSERT INTO " + BotAdministrators.tableName + " (" + BotAdministrators.GetColumnNames() + ") VALUES(" + BotAdministrators.GetPlaceholders() + ')'};
+	SQLite::Statement query{ *botDatabase, "INSERT INTO " + string(BotAdmins.nameTable) + " (" + BotAdmins.GetColumnNamesBetweenCommas() + ") VALUES(" + BotAdmins.GetPlaceholders() + ')'};
 
-	size_t num{ 1 };
+	int num{ 1 };
 
 	query.bind(num++, member.id);
 	query.bind(num++, member.firstName);
@@ -147,9 +144,9 @@ bool BotDatabase::AddGroup(const Group& group)
 	if (Cache.groups.contains(group.id))
 		throw SQLite::Exception("group " + group.title + " already exists");
 
-	SQLite::Statement queryToAddGroup{ *botDatabase, "INSERT INTO " + Groups.tableName + " (" + Groups.GetColumnNames() + ") VALUES(" + Groups.GetPlaceholders() + ')' };
+	SQLite::Statement queryToAddGroup{ *botDatabase, "INSERT INTO " + string(Groups.nameTable) + " (" + Groups.GetColumnNamesBetweenCommas() + ") VALUES(" + Groups.GetPlaceholders() + ')' };
 
-	size_t num{ 1 };
+	int num{ 1 };
 
 	queryToAddGroup.bind(num++, group.id);
 	queryToAddGroup.bind(num++, group.title);
@@ -173,7 +170,7 @@ bool BotDatabase::AddGroup(const Group& group)
 
 bool BotDatabase::UpdateGroup(const Group& group)
 {
-	botDatabase->exec("UPDATE " + Groups.tableName + " SET " + Groups.GetColumnsEqualValues({ to_string(group.id), group.title, group.uniqueTitle, to_string(static_cast<int64_t>(group.type)), to_string(static_cast<int64_t>(group.isBotAdmin)), to_string(group.isBotActive)}) + " WHERE " + Groups.columnNames[0] + " LIKE " + to_string(group.id));
+	botDatabase->exec("UPDATE " + string(Groups.nameTable) + " SET " + Groups.GetColumnsEqualValues({ to_string(group.id), group.title, group.uniqueTitle, to_string(static_cast<int64_t>(group.type)), to_string(static_cast<int64_t>(group.isBotAdmin)), to_string(group.isBotActive)}) + " WHERE " + string(Groups.idColumnName) + " = " + to_string(group.id));
 
 	UpdateGroupFromCache(group);
 
@@ -190,11 +187,11 @@ bool BotDatabase::DeleteGroup(const int64_t id)
 	if (!Cache.groups.contains(id))
 		throw SQLite::Exception("group does not exist");
 
-	SQLite::Statement query{ *botDatabase, "DELETE FROM " + Groups.tableName + " WHERE " + Groups.columnNames[0] + " LIKE ?" };
+	SQLite::Statement query{ *botDatabase, "DELETE FROM " + string(Groups.nameTable) + " WHERE " + string(Groups.idColumnName) + " = ?" };
 
 	query.bind(1, id);
 	query.exec();
-
+	
 	DeleteGroupFromCache(id);
 
 	return true;
@@ -217,12 +214,12 @@ size_t BotDatabase::GetNumberAdmins() const
 
 bool BotDatabase::AddAdminToCache(const Admin& admin)
 {
-	return Cache.admins.emplace(admin.id, admin).second;
+	return Cache.admins.try_emplace(admin.id, admin).second;
 }
 
 bool BotDatabase::AddGroupToCache(const Group& group)
 {
-	return Cache.groups.emplace(group.id, group).second;
+	return Cache.groups.try_emplace(group.id, group).second;
 }
 
 bool BotDatabase::UpdateGroupFromCache(const Group& group)
@@ -243,16 +240,17 @@ bool BotDatabase::DeleteGroupFromCache(const int64_t id)
 	return Cache.groups.erase(id);
 }
 
-string BotDatabase::Table::GetColumnNames() const
+string BotDatabase::Table::GetColumnNamesBetweenCommas() const
 {
 	string AllColumnNames{};
 
-	for (const auto& column : columnNames)
-	{
-		AllColumnNames += column + ',';
-	}
+	AllColumnNames.reserve(columnNames.size() * 5);
 
-	AllColumnNames.pop_back();
+	for (size_t i = 0; i < columnNames.size(); ++i)
+	{
+		if (!AllColumnNames.empty()) { AllColumnNames += ','; }
+		AllColumnNames += columnNames[i];
+	}
 
 	return AllColumnNames;
 }
@@ -261,26 +259,29 @@ string BotDatabase::Table::GetPlaceholders() const
 {
 	string Placeholders{};
 
-	for (auto i = 0; i < columnNames.size(); ++i)
-	{
-		Placeholders += "?,";
-	}
+	Placeholders.reserve(columnNames.size() * 2 - 1);
 
-	Placeholders.pop_back();
+	for (size_t i = 0; i < columnNames.size(); ++i)
+	{
+		Placeholders += (i == 0 ? "?" : ",?");
+	}
 
 	return Placeholders;
 }
 
-string BotDatabase::Table::GetColumnsEqualValues(const vector<string> values) const
+string BotDatabase::Table::GetColumnsEqualValues(const vector<string>& values) const
 {
 	string ColumnsEqualValues{};
 
-	for (auto i = 0; i < columnNames.size(); ++i)
-	{
-		ColumnsEqualValues += columnNames[i] + "='" + values[i] + "',";
-	}
+	ColumnsEqualValues.reserve(columnNames.size() * 10 - 2);
 
-	ColumnsEqualValues.pop_back();
+	for (size_t i = 0; i < values.size(); ++i)
+	{
+		if (!ColumnsEqualValues.empty()) { ColumnsEqualValues += "',"; }
+		ColumnsEqualValues += columnNames[i];
+		ColumnsEqualValues += "='";
+		ColumnsEqualValues += values[i];
+	}
 
 	return ColumnsEqualValues;
 }

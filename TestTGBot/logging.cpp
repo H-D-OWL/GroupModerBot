@@ -1,10 +1,9 @@
 ﻿#include "logging.h"
 //#include <chrono>
 
-
 namespace logging
 {
-	constexpr const string_view LogPrefixToText(LogSource ls)
+	static constexpr const string_view LogPrefixToText(LogSource ls)
 	{
 		switch (ls)
 		{
@@ -15,7 +14,7 @@ namespace logging
 		}
 	}
 
-	constexpr const string_view LogPrefixToText(LogType lt)
+	static constexpr const string_view LogPrefixToText(LogType lt)
 	{
 		switch (lt)
 		{
@@ -26,7 +25,7 @@ namespace logging
 		}
 	}
 
-	constexpr const string_view IsDefined(const string_view text)
+	static constexpr const string_view IsDefined(const string_view text)
 	{
 		return text.empty() ? "undefined" : text;
 	}
