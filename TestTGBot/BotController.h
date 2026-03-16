@@ -2,6 +2,7 @@
 
 #include <random>
 #include <string>
+#include <string_view>
 
 #include <tgbot/tgbot.h>
 
@@ -89,6 +90,8 @@ private:
 
 	//Checks if the message is a system message.
 	bool isSystemMessage(const Message::Ptr& message);
+
+	[[nodiscard]] string CleaningUpLateralSpaces(const string_view text);
 
 	//Generates a string of random characters from 0 to 9 of the specified length.
 	string RandomNumberGenerator(const size_t length);

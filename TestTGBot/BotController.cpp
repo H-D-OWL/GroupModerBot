@@ -42,9 +42,9 @@ OnEventResult BotController::OnStart(Message::Ptr message)
 	{
 		if (botDatabase.GetNumberAdmins() == 0)
 			return { "call by possible owner", "Hello. I'm " + bot.getApi().getMe()->username + ". I don't have an owner yet. To become one, enter the /addBotAdmin command and the confirmation code from the console" };
-		else if(botDatabase.IsAdmin(message->from->id))
+		else if (const auto admin = botDatabase.GetAdmin(message->from->id); admin != nullptr)
 		{
-			if (botDatabase.GetAdmin(message->from->id).isBotOwner)
+			if (admin->isBotOwner)
 				return { "call from owner", "Template response for the owner (debug)" };
 			else
 				return { "сall from admin", "Template response for the admin (debug)" };
@@ -131,6 +131,7 @@ OnEventResult BotController::OnGroups(Message::Ptr message)
 			sendMessageText += to_string(number);
 			sendMessageText += ". ";
 			sendMessageText += group.title + " (" + group.uniqueTitle + ")" + ":\n    IsBotAdmin: " + (group.isBotAdmin ? "Yes" : "No") + "\n    " + "IsBotActive: " + (group.isBotActive ? "Yes" : "No");
+			sendMessageText += '\n';
 			++number;
 		}
 
@@ -149,10 +150,35 @@ OnEventResult BotController::OnGroups(Message::Ptr message)
 
 OnEventResult BotController::OnSetGroupUniqueTitle(Message::Ptr message)
 {
-	string commandParameters = message->text.substr(string_view("/setGroupUniqueTitle ").size());
+	if (message->chat->type == Chat::Type::Private)
+	{
+		string commandParameters = message->text.substr("/setGroupUniqueTitle"sv.size());
+		string oldUniqueTitle = commandParameters.substr(commandParameters.find('\n') + 1);
+		oldUniqueTitle = oldUniqueTitle.substr(0, oldUniqueTitle.find('\n'));
+		string newUniqueTitle = commandParameters.substr(commandParameters.rfind('\n') + 1);
 
+		oldUniqueTitle = CleaningUpLateralSpaces(oldUniqueTitle);
+		newUniqueTitle = CleaningUpLateralSpaces(newUniqueTitle);
 
-	return { commandParameters, "test" };
+		if (!botDatabase.GetGroups().contains(botDatabase.GroupIdFromUniqueTitle(oldUniqueTitle)))
+			return { "error", "error" };
+
+		const BotDatabase::Group& group = botDatabase.GetGroups().at(botDatabase.GroupIdFromUniqueTitle(oldUniqueTitle));
+
+		botDatabase.UpdateGroup(BotDatabase::Group{
+		.id = group.id,
+		.title = group.title,
+		.uniqueTitle = newUniqueTitle,
+		.type = group.type,
+		.isBotAdmin = group.isBotAdmin,
+		.isBotActive = group.isBotActive
+			});
+
+		return { commandParameters, commandParameters };
+
+	}
+	else
+		return { "test", "test" };
 }
 
 OnEventResult BotController::OnBan(Message::Ptr message)
@@ -393,6 +419,19 @@ bool BotController::isSystemMessage(const Message::Ptr& message)
 		||	message->migrateFromChatId != 0
 		||	message->pinnedMessage != nullptr			
 		);
+}
+
+
+string BotController::CleaningUpLateralSpaces(const string_view text)
+{
+	const size_t l = text.find_first_not_of(' ');
+
+	if (l == string::npos)
+		return {};
+
+	const size_t r = text.find_last_not_of(' ');
+
+	return string(text.substr(l, r - l + 1));
 }
 
 string BotController::RandomNumberGenerator(const size_t length)
