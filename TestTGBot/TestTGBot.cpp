@@ -79,6 +79,7 @@ int main()
 			throw runtime_error{ "botToken is invalid" };
 
 		BotController botController{ bot, botDatabase };
+
 		Log(LogSource::Bot, LogType::Event, "bot: \"" + bot.getApi().getMe()->username + "\" has been launched");
 
 		botController.Run();

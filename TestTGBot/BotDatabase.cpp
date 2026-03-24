@@ -52,16 +52,14 @@ void BotDatabase::CacheLoad()
 
 	while (adminsQuery.executeStep())
 	{
-		int num{ 0 };
-
 		AddAdminToCache(Admin{
-		.id				= adminsQuery.getColumn(num++).getInt64(),
-		.firstName		= adminsQuery.getColumn(num++).getString(),
-		.lastName		= adminsQuery.getColumn(num++).getString(),
-		.username		= adminsQuery.getColumn(num++).getString(),
-		.isBot			= static_cast<bool>(adminsQuery.getColumn(num++).getInt64()),
-		.isPremium		= static_cast<bool>(adminsQuery.getColumn(num++).getInt64()),
-		.isBotOwner		= static_cast<bool>(adminsQuery.getColumn(num++).getInt64())
+		adminsQuery.getColumn(0).getInt64(),
+		adminsQuery.getColumn(1).getString(),
+		adminsQuery.getColumn(2).getString(),
+		adminsQuery.getColumn(3).getString(),
+		static_cast<bool>(adminsQuery.getColumn(4).getInt64()),
+		static_cast<bool>(adminsQuery.getColumn(5).getInt64()),
+		static_cast<bool>(adminsQuery.getColumn(6).getInt64())
 			});
 	}
 
@@ -73,15 +71,15 @@ void BotDatabase::CacheLoad()
 
 	while (groupsQuery.executeStep())
 	{
-		int num{ 0 };
-
 		AddGroupToCache(Group{
-		.id				= groupsQuery.getColumn(num++).getInt64(),
-		.title			= groupsQuery.getColumn(num++).getString(),
-		.uniqueTitle	= groupsQuery.getColumn(num++).getString(),
-		.type			= static_cast<Chat::Type>(groupsQuery.getColumn(num++).getInt64()),
-		.isBotAdmin		= static_cast<bool>(groupsQuery.getColumn(num++).getInt64()),
-		.isBotActive	= static_cast<bool>(groupsQuery.getColumn(num++).getInt64())
+		groupsQuery.getColumn(0).getInt64(),
+		groupsQuery.getColumn(1).getString(),
+		groupsQuery.getColumn(2).getString(),
+		static_cast<Chat::Type>(groupsQuery.getColumn(3).getInt64()),
+		static_cast<bool>(groupsQuery.getColumn(4).getInt64()),
+		static_cast<bool>(groupsQuery.getColumn(5).getInt64()),
+		groupsQuery.getColumn(6).getInt64(),
+		groupsQuery.getColumn(7).getInt64() 
 			});
 	}
 }
@@ -117,18 +115,63 @@ void BotDatabase::AddAdmin(const Admin& user)
 		+ BotAdmins.GetPlaceholders() 
 		+ ')'};
 
-	int num{ 1 };
+	query.bind(1, user.id);
+	query.bind(2, user.firstName);
+	query.bind(3, user.lastName);
+	query.bind(4, user.username);
+	query.bind(5, static_cast<int64_t>(user.isBot));
+	query.bind(6, static_cast<int64_t>(user.isPremium));
+	query.bind(7, static_cast<int64_t>(user.isBotOwner));
 
-	query.bind(num++, user.id);
-	query.bind(num++, user.firstName);
-	query.bind(num++, user.lastName);
-	query.bind(num++, user.username);
-	query.bind(num++, user.isBot);
-	query.bind(num++, user.isPremium);
-	query.bind(num++, user.isBotOwner);
 	query.exec();
 
 	AddAdminToCache(user);
+}
+
+void BotDatabase::UpdateAdmin(const Admin& admin)
+{
+	if (!Cache.admins.contains(admin.id))
+		throw SQLite::Exception("admin \"" + admin.username + "\" does not exists");
+
+	SQLite::Statement query{ *botDatabase,
+		"UPDATE "
+		+ string(BotAdmins.nameTable)
+		+ " SET "
+		+ BotAdmins.GetColumnsEqualPlaceholders()
+		+ " WHERE "
+		+ string(BotAdmins.idColumnName)
+		+ " = "
+		+ to_string(admin.id) };
+
+	query.bind(1, admin.id);
+	query.bind(2, admin.firstName);
+	query.bind(3, admin.lastName);
+	query.bind(4, admin.username);
+	query.bind(5, static_cast<int64_t>(admin.isBot));
+	query.bind(6, static_cast<int64_t>(admin.isPremium));
+	query.bind(7, static_cast<int64_t>(admin.isBotOwner));
+
+	query.exec();
+
+	UpdateAdminToCache(admin);
+}
+
+void BotDatabase::DeleteAdmin(const int64_t id)
+{
+	if (!Cache.admins.contains(id))
+		throw SQLite::Exception("admin does not exist");
+
+	SQLite::Statement query{ *botDatabase,
+	"DELETE FROM "
+	+ string(BotAdmins.nameTable)
+	+ " WHERE "
+	+ string(BotAdmins.idColumnName)
+	+ " = ?" };
+
+	query.bind(1, id);
+	query.exec();
+
+	DeleteAdminFromCache(id);
 }
 
 void BotDatabase::AddGroup(const Group& group)
@@ -147,14 +190,15 @@ void BotDatabase::AddGroup(const Group& group)
 		+ Groups.GetPlaceholders() 
 		+ ')' };
 
-	int num{ 1 };
+	queryToAddGroup.bind(1, group.id);
+	queryToAddGroup.bind(2, group.title);
+	queryToAddGroup.bind(3, group.uniqueTitle);
+	queryToAddGroup.bind(4, static_cast<int64_t>(group.type));
+	queryToAddGroup.bind(5, static_cast<int64_t>(group.isBotAdmin));
+	queryToAddGroup.bind(6, static_cast<int64_t>(group.isBotActive));
+	queryToAddGroup.bind(7, group.numWarnToMute);
+	queryToAddGroup.bind(8, group.numWarnToBan);
 
-	queryToAddGroup.bind(num++, group.id);
-	queryToAddGroup.bind(num++, group.title);
-	queryToAddGroup.bind(num++, group.uniqueTitle);
-	queryToAddGroup.bind(num++, static_cast<int64_t>(group.type));
-	queryToAddGroup.bind(num++, static_cast<int64_t>(group.isBotAdmin));
-	queryToAddGroup.bind(num++, static_cast<int64_t>(group.isBotActive));
 	queryToAddGroup.exec();
 
 	AddGroupToCache(group);
@@ -163,7 +207,7 @@ void BotDatabase::AddGroup(const Group& group)
 void BotDatabase::UpdateGroup(const Group& group)
 {
 	if (!Cache.groups.contains(group.id))
-		throw SQLite::Exception("group \"" + group.title + "\" does not exists");
+		throw SQLite::Exception("group \"" + group.uniqueTitle + "\" does not exists");
 
 	if (!Cache.groupIdsByUniqueTitle.contains(Cache.groups.at(group.id).uniqueTitle))
 		throw SQLite::Exception("unique title \"" + group.uniqueTitle + "\" does not exists");
@@ -181,20 +225,18 @@ void BotDatabase::UpdateGroup(const Group& group)
 		+ " = " 
 		+ to_string(group.id)};
 
-	int num{ 1 };
+	query.bind(1, group.id);
+	query.bind(2, group.title);
+	query.bind(3, group.uniqueTitle);
+	query.bind(4, static_cast<int64_t>(group.type));
+	query.bind(5, static_cast<int64_t>(group.isBotAdmin));
+	query.bind(6, static_cast<int64_t>(group.isBotActive));
+	query.bind(7, group.numWarnToMute);
+	query.bind(8, group.numWarnToBan);
 
-	query.bind(num++, group.id);
-	query.bind(num++, group.title);
-	query.bind(num++, group.uniqueTitle);
-	query.bind(num++, static_cast<int64_t>(group.type));
-	query.bind(num++, static_cast<int64_t>(group.isBotAdmin));
-	query.bind(num++, static_cast<int64_t>(group.isBotActive));
 	query.exec();
 
-	Cache.groupIdsByUniqueTitle.erase(Cache.groups.at(group.id).uniqueTitle);
-	Cache.groupIdsByUniqueTitle.try_emplace(group.uniqueTitle, group.id);
-
-	Cache.groups.at(group.id) = group;
+	UpdateGroupToCache(group);
 }
 
 const unordered_map<int64_t, BotDatabase::Group>& BotDatabase::GetGroups() const
@@ -248,9 +290,19 @@ const BotDatabase::Admin* BotDatabase::GetAdmin(const int64_t userId) const
 	}
 }
 
+const unordered_map<int64_t, BotDatabase::Admin>& BotDatabase::GetAdmins() const
+{
+	return Cache.admins;
+}
+
 bool BotDatabase::IsAdmin(const int64_t userId) const
 {
 	return Cache.admins.contains(userId);
+}
+
+bool BotDatabase::IsOwner(const int64_t userId) const
+{
+	return Cache.admins.contains(userId) && Cache.admins.at(userId).isBotOwner;
 }
 
 size_t BotDatabase::GetNumberAdmins() const
@@ -265,12 +317,34 @@ void BotDatabase::AddAdminToCache(const Admin& admin)
 	assert(emplaceAdmin && "Cache desync");
 }
 
+void BotDatabase::UpdateAdminToCache(const Admin& admin)
+{
+	Cache.admins.at(admin.id) = admin;
+}
+
+void BotDatabase::DeleteAdminFromCache(const int64_t id)
+{
+	const bool eraseAdmin = Cache.admins.erase(id);
+
+	assert(eraseAdmin && "Cache desync");
+}
+
 void BotDatabase::AddGroupToCache(const Group& group)
 {
 	const bool emplaceUniqueTitle = Cache.groupIdsByUniqueTitle.try_emplace(group.uniqueTitle, group.id).second;
 	const bool emplaceGroup = Cache.groups.try_emplace(group.id, group).second;
 
 	assert(emplaceUniqueTitle && emplaceGroup && "Cache desync");
+}
+
+void BotDatabase::UpdateGroupToCache(const Group& group)
+{
+	const bool eraceUniqueTitle = Cache.groupIdsByUniqueTitle.erase(Cache.groups.at(group.id).uniqueTitle);
+	const bool emplaceGroup = Cache.groupIdsByUniqueTitle.try_emplace(group.uniqueTitle, group.id).second;
+
+	Cache.groups.at(group.id) = group;
+
+	assert(eraceUniqueTitle && emplaceGroup && "Cache desync");
 }
 
 void BotDatabase::DeleteGroupFromCache(const int64_t id)

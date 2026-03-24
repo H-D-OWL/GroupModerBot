@@ -12,15 +12,21 @@ BotController::BotController(Bot& bot, BotDatabase& botDatabase) : bot(bot), bot
 	}
 
 	bot.getEvents().onCommand("start",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "start"),				[&](){ return OnStart(message); }); });
+
 	bot.getEvents().onCommand("botActive",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "botActive"),			[&](){ return OnBotActive(message); }); });
 	bot.getEvents().onCommand("botDeactive",			[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "botDeactive"),			[&](){ return OnBotDeactive(message); }); });
+
 	bot.getEvents().onCommand("groups",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "groups"),				[&](){ return OnGroups(message); }); });
 	bot.getEvents().onCommand("setGroupUniqueTitle",	[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "setGroupUniqueTitle"),	[&](){ return OnSetGroupUniqueTitle(message); }); });
-	
-	bot.getEvents().onCommand("ban",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "ban"),					[&](){ return OnBan(message); }); });
-	bot.getEvents().onCommand("unban",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "unban"),				[&](){ return OnUnban(message); }); });
-	bot.getEvents().onCommand("mute",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "mute"),				[&](){ return OnMute(message); }); });
-	bot.getEvents().onCommand("unmute",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "unmute"),				[&](){ return OnUnmute(message); }); });
+
+	bot.getEvents().onCommand("admins",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "admins"),				[&](){ return OnAdmins(message); }); });
+	bot.getEvents().onCommand("addAdmin",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "addAdmin"),			[&](){ return OnAddAdmin(message); }); });
+	bot.getEvents().onCommand("removeAdmin",			[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "removeAdmin"),			[&](){ return OnRemoveAdmin(message); }); });
+
+	//bot.getEvents().onCommand("ban",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "ban"),					[&](){ return OnBan(message); }); });
+	//bot.getEvents().onCommand("unban",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "unban"),				[&](){ return OnUnban(message); }); });
+	//bot.getEvents().onCommand("mute",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "mute"),				[&](){ return OnMute(message); }); });
+	//bot.getEvents().onCommand("unmute",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "unmute"),				[&](){ return OnUnmute(message); }); });
 	
 	bot.getEvents().onMyChatMember	(					[this](ChatMemberUpdated::Ptr update)	{ SafeExecute(ContextLog::ToContextLog(update,	"changeMyChatMember"),	[&](){ return onMyChatMember(update); }); });
 
@@ -40,147 +46,390 @@ OnEventResult BotController::OnStart(Message::Ptr message)
 {
 	if (message->chat->type == Chat::Type::Private)
 	{
-		if (botDatabase.GetNumberAdmins() == 0)
-			return { "call by possible owner", "Hello. I'm " + bot.getApi().getMe()->username + ". I don't have an owner yet. To become one, enter the /addBotAdmin command and the confirmation code from the console" };
-		else if (const auto admin = botDatabase.GetAdmin(message->from->id); admin != nullptr)
+		if (botDatabase.IsOwner(message->from->id))
 		{
-			if (admin->isBotOwner)
-				return { "call from owner", "Template response for the owner (debug)" };
-			else
-				return { "сall from admin", "Template response for the admin (debug)" };
+			return { "call from owner", "Template response for the owner (debug)" };
+		}
+		else if (botDatabase.IsAdmin(message->from->id))
+		{
+			return { "сall from admin", "Template response for the admin (debug)" };
+		}
+		else if (botDatabase.GetNumberAdmins() == 0)
+		{
+			return { "call by possible owner", "Hello. I'm " + bot.getApi().getMe()->username + ". I don't have an owner yet. To become one, enter the /addBotAdmin command and the confirmation code from the console" };
 		}
 		else
+		{
 			return { "сall from not admin", "Hello. I'm " + bot.getApi().getMe()->username + ". To become a bot admin, type the command /addBotAdmin and the confirmation code that the bot owner will provide you" };
+		}
 	}
 	else
 		return { "сall in non-private chat", "" };
 }
 
-/*OnEventResult BotController::OnStart(Message::Ptr message)
-{
-	if (message->chat->type == Chat::Type::Private)
-	{
-		string code = message->text.substr(message->text.size() == 6 ? 6 : 7);
-
-		if (confirmationCode != "ERROR" && code == confirmationCode)
-		{
-			botDatabase.AddAdmin(BotDatabase::Admin{
-			.id			= message->from->id,
-			.firstName	= message->from->firstName,
-			.lastName	= message->from->lastName,
-			.username	= message->from->username,
-			.isBot		= message->from->isBot,
-			.isPremium	= message->from->isPremium,
-			.isBotOwner	= true
-				});
-
-			confirmationCode = "ERROR";
-
-			return { "confirmation code is correct", "You have become a bot admin" };
-		}
-		else if (confirmationCode != "ERROR" && !code.empty())
-			return { "confirmation code is incorrect", "The confirmation code is incorrect" };
-		else
-			return { "confirmation code not entered", (botDatabase.IsAdmin(message->from->id) ? "You are the bot admin" : "Enter confirmation code")};
-	}
-	else
-		return {"сalling in a non-private chat", ""};
-}*/
-
 OnEventResult BotController::OnBotActive(Message::Ptr message)
 {
 	if (message->chat->type != Chat::Type::Private)
-		botDatabase.UpdateGroup(BotDatabase::Group{
-		.id				= message->chat->id,
-		.title			= message->chat->title,
-		.uniqueTitle	= (*botDatabase.GetGroups().find(message->chat->id)).second.uniqueTitle,
-		.type			= message->chat->type,
-		.isBotAdmin		= (*botDatabase.GetGroups().find(message->chat->id)).second.isBotAdmin,
-		.isBotActive	= true
-			});
+	{
+		if (botDatabase.IsOwner(message->from->id))
+		{
+			botDatabase.UpdateGroup(BotDatabase::Group{
+			message->chat->id,
+			message->chat->title,
+			(*botDatabase.GetGroups().find(message->chat->id)).second.uniqueTitle,
+			message->chat->type,
+			(*botDatabase.GetGroups().find(message->chat->id)).second.isBotAdmin,
+			true,
+			(*botDatabase.GetGroups().find(message->chat->id)).second.numWarnToMute,
+			(*botDatabase.GetGroups().find(message->chat->id)).second.numWarnToBan
+				});
 
-	return { "test", "test" };
-
+			return { "call from owner1", "1" };
+		}
+		else if (botDatabase.IsAdmin(message->from->id))
+		{
+			return { "сall from admin2", "2" };
+		}
+		else
+		{
+			return { "сall from not admin3", "3" };
+		}
+	}
+	else
+		return { "4", "4" };
 }
 
 OnEventResult BotController::OnBotDeactive(Message::Ptr message)
 {
 	if (message->chat->type != Chat::Type::Private)
-		botDatabase.UpdateGroup(BotDatabase::Group{
-		.id				= message->chat->id,
-		.title			= message->chat->title,
-		.uniqueTitle = (*botDatabase.GetGroups().find(message->chat->id)).second.uniqueTitle,
-		.type			= message->chat->type,
-		.isBotAdmin		= (*botDatabase.GetGroups().find(message->chat->id)).second.isBotAdmin,
-		.isBotActive	= false
-			});
-	return { "test", "test" };
+	{
+		if (botDatabase.IsOwner(message->from->id))
+		{
+			botDatabase.UpdateGroup(BotDatabase::Group{
+			message->chat->id,
+			message->chat->title,
+			(*botDatabase.GetGroups().find(message->chat->id)).second.uniqueTitle,
+			message->chat->type,
+			(*botDatabase.GetGroups().find(message->chat->id)).second.isBotAdmin,
+			false,
+			(*botDatabase.GetGroups().find(message->chat->id)).second.numWarnToMute,
+			(*botDatabase.GetGroups().find(message->chat->id)).second.numWarnToBan
 
+				});
+
+			return { "call from owner5", "5" };
+		}
+		else if (botDatabase.IsAdmin(message->from->id))
+		{
+			return { "сall from admin6", "6" };
+		}
+		else
+		{
+			return { "сall from not admin7", "7" };
+		}
+	}
+	else
+		return { "test8", "test8" };
 }
 
 OnEventResult BotController::OnGroups(Message::Ptr message)
 {
 	if (message->chat->type == Chat::Type::Private)
 	{
-		string sendMessageText{};
-
-		size_t number{ 1 };
-
-		for (const auto& [id, group] : botDatabase.GetGroups())
+		if (botDatabase.IsOwner(message->from->id) || botDatabase.IsAdmin(message->from->id))
 		{
-			sendMessageText += to_string(number);
-			sendMessageText += ". ";
-			sendMessageText += group.title + " (" + group.uniqueTitle + ")" + ":\n    IsBotAdmin: " + (group.isBotAdmin ? "Yes" : "No") + "\n    " + "IsBotActive: " + (group.isBotActive ? "Yes" : "No");
-			sendMessageText += '\n';
-			++number;
-		}
+			string sendMessageText{};
 
-		if (number == 1)
+			size_t number{ 1 };
+
+			for (const auto& [id, groupFromCache] : botDatabase.GetGroups())
+			{
+				sendMessageText += to_string(number);
+				sendMessageText += ". ";
+				sendMessageText += groupFromCache.title 
+					+ " (" 
+					+ groupFromCache.uniqueTitle 
+					+ ")" 
+					+ ":\n    IsBotAdmin: " 
+					+ (groupFromCache.isBotAdmin ? "Yes" : "No") 
+					+ "\n    " 
+					+ "IsBotActive: " 
+					+ (groupFromCache.isBotActive ? "Yes" : "No")
+					+ "\n    "
+					+ "NumWarnToMute: "
+					+ to_string(groupFromCache.numWarnToMute)
+					+ "\n    "
+					+ "NumWarnToBan: "
+					+ to_string(groupFromCache.numWarnToBan);
+				sendMessageText += '\n';
+				++number;
+			}
+
+			if (number == 1)
+			{
+				sendMessageText = "There are no groups";
+			}
+
+			return { "user: " + to_string(message->from->id) + ' ' + message->from->firstName + ' ' + message->from->lastName + " looked at the groups in which the bot operates", sendMessageText };
+		}
+		else
 		{
-			sendMessageText = "There are no groups";
+			return { "сall from not admin9", "9" };
 		}
-
-		Log(LogSource::Bot, LogType::Event, "user: " + to_string(message->from->id) + ' ' + message->from->firstName + ' ' + message->from->lastName + " looked at the groups in which the bot operates");
-
-		bot.getApi().sendMessage(message->chat->id, sendMessageText);
 	}
-	return { "test", "test" };
-
+	else
+		return { "test10", "test10" };
 }
 
 OnEventResult BotController::OnSetGroupUniqueTitle(Message::Ptr message)
 {
 	if (message->chat->type == Chat::Type::Private)
 	{
-		string commandParameters = message->text.substr("/setGroupUniqueTitle"sv.size());
-		string oldUniqueTitle = commandParameters.substr(commandParameters.find('\n') + 1);
-		oldUniqueTitle = oldUniqueTitle.substr(0, oldUniqueTitle.find('\n'));
-		string newUniqueTitle = commandParameters.substr(commandParameters.rfind('\n') + 1);
+		if (botDatabase.IsOwner(message->from->id))
+		{
+			stringstream commandParameters(message->text.substr("/setGroupUniqueTitle"sv.size()));
 
-		oldUniqueTitle = CleaningUpLateralSpaces(oldUniqueTitle);
-		newUniqueTitle = CleaningUpLateralSpaces(newUniqueTitle);
+			string oldUniqueTitle{}, newUniqueTitle{};
 
-		if (!botDatabase.GetGroups().contains(botDatabase.GroupIdFromUniqueTitle(oldUniqueTitle)))
-			return { "error", "error" };
+			if (!(commandParameters >> oldUniqueTitle >> newUniqueTitle))
+			{
+				return { "20", "20" };
+			}
 
-		const BotDatabase::Group& group = botDatabase.GetGroups().at(botDatabase.GroupIdFromUniqueTitle(oldUniqueTitle));
+			if (newUniqueTitle.length() > 32)
+			{
+				return { "21", "21" };
+			}
 
-		botDatabase.UpdateGroup(BotDatabase::Group{
-		.id = group.id,
-		.title = group.title,
-		.uniqueTitle = newUniqueTitle,
-		.type = group.type,
-		.isBotAdmin = group.isBotAdmin,
-		.isBotActive = group.isBotActive
-			});
+			if (!all_of(newUniqueTitle.begin(), newUniqueTitle.end(), [](unsigned char c) { return isalnum(c) || c == '_'; }))
+			{
+				return { "19", "19" };
+			}
 
-		return { commandParameters, commandParameters };
+			if (!botDatabase.GetGroups().contains(botDatabase.GroupIdFromUniqueTitle(oldUniqueTitle)))
+				return { "error11", "error11" };
+
+			const BotDatabase::Group& group = botDatabase.GetGroups().at(botDatabase.GroupIdFromUniqueTitle(oldUniqueTitle));
+
+			botDatabase.UpdateGroup(BotDatabase::Group{
+			group.id,
+			group.title,
+			newUniqueTitle,
+			group.type,
+			group.isBotAdmin,
+			group.isBotActive,
+			group.numWarnToMute,
+			group.numWarnToBan
+				});
+
+			return { newUniqueTitle, newUniqueTitle };
+		}
+		else if (botDatabase.IsAdmin(message->from->id))
+		{
+			return { "сall from admin12", "12" };
+		}
+		else
+		{
+			return { "сall from not admin13", "13" };
+		}
+	}
+	else
+		return { "test14", "test14" };
+}
+
+OnEventResult BotController::OnAdmins(Message::Ptr message)
+{
+	if (message->chat->type == Chat::Type::Private)
+	{
+		if (botDatabase.IsOwner(message->from->id) || botDatabase.IsAdmin(message->from->id))
+		{
+			string sendMessageText{};
+
+			size_t number{ 1 };
+
+			for (const auto& [id, adminFromCache] : botDatabase.GetAdmins())
+			{
+				// TODO: Debug check. So that it works with debug admins.
+				if(id > 100)
+				{
+					const User::Ptr admin = bot.getApi().getChatMember(id, id)->user;
+
+					botDatabase.UpdateAdmin(BotDatabase::Admin{
+					admin->id,
+					admin->firstName,
+					admin->lastName,
+					admin->username,
+					admin->isBot,
+					admin->isPremium,
+					adminFromCache.isBotOwner
+						});
+				}
+
+				sendMessageText += to_string(number);
+				sendMessageText += ". ";
+				sendMessageText += adminFromCache.username 
+					+ " (" 
+					+ adminFromCache.firstName 
+					+ ' ' 
+					+ adminFromCache.lastName + ")" 
+					+ ":\n    IsBotOwner: " 
+					+ (adminFromCache.isBotOwner ? "Yes" : "No") 
+					+ "\n    " 
+					+ "IsBot: " 
+					+ (adminFromCache.isBot ? "Yes" : "No") 
+					+ "\n    " 
+					+ "IsPremium: " 
+					+ (adminFromCache.isPremium ? "Yes" : "No");
+				sendMessageText += '\n';
+				++number;
+			}
+
+			if (number == 1)
+			{
+				sendMessageText = "There are no groups";
+			}
+
+			return { "user: " + to_string(message->from->id) + ' ' + message->from->firstName + ' ' + message->from->lastName + " looked at the groups in which the bot operates", sendMessageText };
+		}
+		else
+		{
+			return { "24", "24" };
+		}
+	}
+	else
+		return { "23", "23" };
+}
+
+OnEventResult BotController::OnAddAdmin(Message::Ptr message)
+{
+	if (message->chat->type == Chat::Type::Private)
+	{
+		stringstream commandParameters(message->text.substr("/addAdmin"sv.size()));
+
+		string adminConfirmationCode{};
+
+		if (!(commandParameters >> adminConfirmationCode))
+		{
+			return { "25", "25" };
+		}
+
+		if (botDatabase.IsOwner(message->from->id))
+		{
+			confirmationCode.clear();
+
+			confirmationCode = RandomNumberGenerator(32);
+
+			return { "call from owner15", "Confirmation code = " + confirmationCode };
+		}
+		else if (botDatabase.IsAdmin(message->from->id))
+		{
+			return { "сall from admin16", "16" };
+		}
+		else
+		{
+			if (confirmationCode != "ERROR" && adminConfirmationCode == confirmationCode && botDatabase.GetNumberAdmins() == 0)
+			{
+				botDatabase.AddAdmin(BotDatabase::Admin{
+				message->from->id,
+				message->from->firstName,
+				message->from->lastName,
+				message->from->username,
+				message->from->isBot,
+				message->from->isPremium,
+				true
+					});
+
+				confirmationCode = "ERROR";
+
+				return { "confirmation code is correct", "You have become a bot admin" };
+			}
+			else if (confirmationCode != "ERROR" && adminConfirmationCode == confirmationCode && botDatabase.GetNumberAdmins() > 0)
+			{
+				botDatabase.AddAdmin(BotDatabase::Admin{
+				message->from->id,
+				message->from->firstName,
+				message->from->lastName,
+				message->from->username,
+				message->from->isBot,
+				message->from->isPremium,
+				false
+					});
+
+				confirmationCode = "ERROR";
+			}
+			else if (confirmationCode != "ERROR" && !adminConfirmationCode.empty())
+			{
+				return { "confirmation code is incorrect", "The confirmation code is incorrect" };
+			}
+			else
+			{
+				return { "test17", "test17" };
+			}
+		}
+
+		return { "test18", "test18" };
 
 	}
 	else
-		return { "test", "test" };
+		return { "сalling in a non-private chat", "" };
 }
 
+OnEventResult BotController::OnRemoveAdmin(Message::Ptr message)
+{
+	if (message->chat->type == Chat::Type::Private)
+	{
+		if (botDatabase.IsOwner(message->from->id))
+		{
+			stringstream commandParameters(message->text.substr("/removeAdmin"sv.size()));
+
+			size_t adminNumber{};
+
+			if (!(commandParameters >> adminNumber))
+			{
+				return { "26", "26" };
+			}
+
+			--adminNumber;
+
+			if (adminNumber >= 0 && adminNumber < botDatabase.GetNumberAdmins())
+			{
+				size_t count = 0;
+
+				for (const auto& [id, adminFromCache] : botDatabase.GetAdmins())
+				{
+					if (count == adminNumber)
+					{
+						if (!botDatabase.IsOwner(id))
+						{
+							botDatabase.DeleteAdmin(id);
+							break;
+						}
+						else
+						{
+							return { "test28", "test28" };
+						}
+					}
+
+					++count;
+				}
+
+				return { "test29", "test29" };
+			}
+			else
+			{
+				return { "test27", "test27" };
+			}
+		}
+		else
+		{
+			return { "test30", "test30" };
+		}
+	}
+	else
+		return { "test22", "test22" };
+}
+
+/*
 OnEventResult BotController::OnBan(Message::Ptr message)
 {
 	if (message->chat->type != Chat::Type::Private)
@@ -326,6 +575,7 @@ OnEventResult BotController::OnUnmute(Message::Ptr message)
 	return { "test", "test" };
 
 }
+*/
 
 OnEventResult BotController::OnNonCommand(Message::Ptr message)
 {
@@ -350,11 +600,7 @@ OnEventResult BotController::OnNonCommand(Message::Ptr message)
 			Log(LogSource::Bot, LogType::Event, "In group " + to_string(chatId) + ", user " + to_string(message->from->id) + " wrote " + messageText);
 			break;
 		case Chat::Type::Supergroup:
-
-			if (bot.getToken() == "8231301649:AAEtgMiY1ukuwycs5RWus5IDVfQbrHv7BKo")
-			{
-				bot.getApi().sendMessage(message->chat->id, message->text);
-			}
+				//bot.getApi().sendMessage(message->chat->id, message->text);
 			Log(LogSource::Bot, LogType::Event, "In supergroup " + to_string(chatId) + ", user " + to_string(message->from->id) + " wrote " + messageText);
 			break;
 		case Chat::Type::Channel:
@@ -377,23 +623,27 @@ OnEventResult BotController::onMyChatMember(ChatMemberUpdated::Ptr update)
 	if (!isContains && (status == "member" || status == "administrator"))
 	{
 		botDatabase.AddGroup(BotDatabase::Group{
-		.id				= update->chat->id,
-		.title			= update->chat->title,
-		.uniqueTitle	= RandomNumberGenerator(32),
-		.type			= update->chat->type,
-		.isBotAdmin		= status == "administrator",
-		.isBotActive	= false
+		update->chat->id,
+		update->chat->title,
+		RandomNumberGenerator(32),
+		update->chat->type,
+		status == "administrator",
+		false,
+		3,
+		5
 			});
 	}
 	else if (isContains && (status == "member" || status == "administrator"))
 	{
 		botDatabase.UpdateGroup(BotDatabase::Group{
-		.id				= update->chat->id,
-		.title			= update->chat->title,
-		.uniqueTitle	= (*botDatabase.GetGroups().find(update->chat->id)).second.uniqueTitle,
-		.type			= update->chat->type,
-		.isBotAdmin		= status == "administrator",
-		.isBotActive	= (*botDatabase.GetGroups().find(update->chat->id)).second.isBotActive
+		update->chat->id,
+		update->chat->title,
+		(*botDatabase.GetGroups().find(update->chat->id)).second.uniqueTitle,
+		update->chat->type,
+		status == "administrator",
+		(*botDatabase.GetGroups().find(update->chat->id)).second.isBotActive,
+		(*botDatabase.GetGroups().find(update->chat->id)).second.numWarnToMute,
+		(*botDatabase.GetGroups().find(update->chat->id)).second.numWarnToBan
 			});
 	}
 	else if (isContains && (status == "left" || status == "kicked"))

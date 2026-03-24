@@ -23,15 +23,29 @@ public:
 private:
 
 	OnEventResult OnStart(Message::Ptr message);
+
 	OnEventResult OnBotActive(Message::Ptr message);
 	OnEventResult OnBotDeactive(Message::Ptr message);
+
 	OnEventResult OnGroups(Message::Ptr message);
 	OnEventResult OnSetGroupUniqueTitle(Message::Ptr message);
 
-	OnEventResult OnBan(Message::Ptr message);
-	OnEventResult OnUnban(Message::Ptr message);
-	OnEventResult OnMute(Message::Ptr message);
-	OnEventResult OnUnmute(Message::Ptr message);
+	OnEventResult OnAdmins(Message::Ptr message);
+	OnEventResult OnAddAdmin(Message::Ptr message);
+	OnEventResult OnRemoveAdmin(Message::Ptr message);
+
+	OnEventResult OnSetNumWarnToMute(Message::Ptr message);
+	OnEventResult OnSetNumWarnToBan(Message::Ptr message);
+
+	OnEventResult OnWarn(Message::Ptr message);
+	OnEventResult OnSetwarn(Message::Ptr message);
+	OnEventResult OnViewWarn(Message::Ptr message);
+
+
+	//OnEventResult OnBan(Message::Ptr message);
+	//OnEventResult OnUnban(Message::Ptr message);
+	//OnEventResult OnMute(Message::Ptr message);
+	//OnEventResult OnUnmute(Message::Ptr message);
 
 	OnEventResult OnNonCommand(Message::Ptr message);
 	OnEventResult onMyChatMember(ChatMemberUpdated::Ptr update);
