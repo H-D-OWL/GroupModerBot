@@ -23,6 +23,14 @@ BotController::BotController(Bot& bot, BotDatabase& botDatabase) : bot(bot), bot
 	bot.getEvents().onCommand("addAdmin",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "addAdmin"),			[&](){ return OnAddAdmin(message); }); });
 	bot.getEvents().onCommand("removeAdmin",			[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "removeAdmin"),			[&](){ return OnRemoveAdmin(message); }); });
 
+	bot.getEvents().onCommand("setWarnMuteSettings",	[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "setWarnMuteSettings"),	[&](){ return OnSetWarnMuteSettings(message); }); });
+	bot.getEvents().onCommand("setWarnBanSettings",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "setWarnBanSettings"),	[&](){ return OnSetWarnBanSettings(message); }); });
+
+	bot.getEvents().onCommand("addWarn",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "addWarn"),				[&]() { return OnAddWarn(message); }); });
+	bot.getEvents().onCommand("removeWarn",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "removeWarn"),			[&]() { return OnRemoveWarn(message); }); });
+	bot.getEvents().onCommand("setWarn",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "setWarn"),				[&]() { return OnSetwarn(message); }); });
+	bot.getEvents().onCommand("viewWarn",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "viewWarn"),			[&]() { return OnViewWarn(message); }); });
+
 	//bot.getEvents().onCommand("ban",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "ban"),					[&](){ return OnBan(message); }); });
 	//bot.getEvents().onCommand("unban",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "unban"),				[&](){ return OnUnban(message); }); });
 	//bot.getEvents().onCommand("mute",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "mute"),				[&](){ return OnMute(message); }); });
@@ -73,16 +81,13 @@ OnEventResult BotController::OnBotActive(Message::Ptr message)
 	{
 		if (botDatabase.IsOwner(message->from->id))
 		{
-			botDatabase.UpdateGroup(BotDatabase::Group{
-			message->chat->id,
-			message->chat->title,
-			(*botDatabase.GetGroups().find(message->chat->id)).second.uniqueTitle,
-			message->chat->type,
-			(*botDatabase.GetGroups().find(message->chat->id)).second.isBotAdmin,
-			true,
-			(*botDatabase.GetGroups().find(message->chat->id)).second.numWarnToMute,
-			(*botDatabase.GetGroups().find(message->chat->id)).second.numWarnToBan
-				});
+			const BotDatabase::Group& group = botDatabase.GetGroups().at(message->chat->id);
+			const BotDatabase::GroupSettings& groupSettings = botDatabase.GetGroupsSettings().at(group.id);
+
+			BotDatabase::Group updateGroup = group;
+			updateGroup.isBotActive = true;
+
+			botDatabase.UpdateGroup(updateGroup, groupSettings);
 
 			return { "call from owner1", "1" };
 		}
@@ -105,17 +110,13 @@ OnEventResult BotController::OnBotDeactive(Message::Ptr message)
 	{
 		if (botDatabase.IsOwner(message->from->id))
 		{
-			botDatabase.UpdateGroup(BotDatabase::Group{
-			message->chat->id,
-			message->chat->title,
-			(*botDatabase.GetGroups().find(message->chat->id)).second.uniqueTitle,
-			message->chat->type,
-			(*botDatabase.GetGroups().find(message->chat->id)).second.isBotAdmin,
-			false,
-			(*botDatabase.GetGroups().find(message->chat->id)).second.numWarnToMute,
-			(*botDatabase.GetGroups().find(message->chat->id)).second.numWarnToBan
+			const BotDatabase::Group& group = botDatabase.GetGroups().at(message->chat->id);
+			const BotDatabase::GroupSettings& groupSettings = botDatabase.GetGroupsSettings().at(group.id);
 
-				});
+			BotDatabase::Group updateGroup = group;
+			updateGroup.isBotActive = false;
+
+			botDatabase.UpdateGroup(updateGroup, groupSettings);
 
 			return { "call from owner5", "5" };
 		}
@@ -146,21 +147,21 @@ OnEventResult BotController::OnGroups(Message::Ptr message)
 			{
 				sendMessageText += to_string(number);
 				sendMessageText += ". ";
-				sendMessageText += groupFromCache.title 
-					+ " (" 
-					+ groupFromCache.uniqueTitle 
-					+ ")" 
-					+ ":\n    IsBotAdmin: " 
-					+ (groupFromCache.isBotAdmin ? "Yes" : "No") 
-					+ "\n    " 
-					+ "IsBotActive: " 
+				sendMessageText += groupFromCache.title
+					+ " ("
+					+ groupFromCache.uniqueTitle
+					+ ")"
+					+ ":\n    IsBotAdmin: "
+					+ (groupFromCache.isBotAdmin ? "Yes" : "No")
+					+ "\n    "
+					+ "IsBotActive: "
 					+ (groupFromCache.isBotActive ? "Yes" : "No")
 					+ "\n    "
-					+ "NumWarnToMute: "
+					/*+ "NumWarnToMute: "
 					+ to_string(groupFromCache.numWarnToMute)
 					+ "\n    "
 					+ "NumWarnToBan: "
-					+ to_string(groupFromCache.numWarnToBan);
+					+ to_string(groupFromCache.numWarnToBan)*/;
 				sendMessageText += '\n';
 				++number;
 			}
@@ -210,17 +211,12 @@ OnEventResult BotController::OnSetGroupUniqueTitle(Message::Ptr message)
 				return { "error11", "error11" };
 
 			const BotDatabase::Group& group = botDatabase.GetGroups().at(botDatabase.GroupIdFromUniqueTitle(oldUniqueTitle));
+			const BotDatabase::GroupSettings& groupSettings = botDatabase.GetGroupsSettings().at(group.id);
 
-			botDatabase.UpdateGroup(BotDatabase::Group{
-			group.id,
-			group.title,
-			newUniqueTitle,
-			group.type,
-			group.isBotAdmin,
-			group.isBotActive,
-			group.numWarnToMute,
-			group.numWarnToBan
-				});
+			BotDatabase::Group updateGroup = group;
+			updateGroup.uniqueTitle = newUniqueTitle;
+
+			botDatabase.UpdateGroup(updateGroup, groupSettings);
 
 			return { newUniqueTitle, newUniqueTitle };
 		}
@@ -429,6 +425,106 @@ OnEventResult BotController::OnRemoveAdmin(Message::Ptr message)
 		return { "test22", "test22" };
 }
 
+OnEventResult BotController::OnSetWarnMuteSettings(Message::Ptr message)
+{
+	if (message->chat->type == Chat::Type::Private)
+	{
+		if (botDatabase.IsOwner(message->from->id) || botDatabase.IsAdmin(message->from->id))
+		{
+			stringstream commandParameters(message->text.substr("/setWarnMuteSettings"sv.size()));
+
+			string UniqueTitle{};
+
+			int64_t numWarnToMute{};
+
+			if (!(commandParameters >> UniqueTitle >> numWarnToMute))
+			{
+				return { "33", "33" };
+			}
+
+			if (numWarnToMute < 0)
+				return { "error34", "error34" };
+
+			if (!botDatabase.GetGroups().contains(botDatabase.GroupIdFromUniqueTitle(UniqueTitle)))
+				return { "error35", "error35" };
+
+			const BotDatabase::Group& group = botDatabase.GetGroups().at(botDatabase.GroupIdFromUniqueTitle(UniqueTitle));
+			const BotDatabase::GroupSettings& groupSettings = botDatabase.GetGroupsSettings().at(group.id);
+
+			BotDatabase::GroupSettings updategroupSettings = groupSettings;
+			updategroupSettings.numWarnToMute = numWarnToMute;
+
+			botDatabase.UpdateGroup(group, updategroupSettings);
+
+			return { "test36", "test36" };
+		}
+		else
+			return { "test32", "test32" };
+	}
+	else
+		return { "41", "41" };
+}
+
+OnEventResult BotController::OnSetWarnBanSettings(Message::Ptr message)
+{
+	if (message->chat->type == Chat::Type::Private)
+	{
+		if (botDatabase.IsOwner(message->from->id) || botDatabase.IsAdmin(message->from->id))
+		{
+			stringstream commandParameters(message->text.substr("/setWarnBanSettings"sv.size()));
+
+			string UniqueTitle{};
+
+			int64_t numWarnToBan{};
+
+			if (!(commandParameters >> UniqueTitle >> numWarnToBan))
+			{
+				return { "38", "38" };
+			}
+
+			if (numWarnToBan < 0)
+				return { "error39", "error39" };
+
+			if (!botDatabase.GetGroups().contains(botDatabase.GroupIdFromUniqueTitle(UniqueTitle)))
+				return { "error40", "error40" };
+
+			const BotDatabase::Group& group = botDatabase.GetGroups().at(botDatabase.GroupIdFromUniqueTitle(UniqueTitle));
+			const BotDatabase::GroupSettings& groupSettings = botDatabase.GetGroupsSettings().at(group.id);
+
+			BotDatabase::GroupSettings updategroupSettings = groupSettings;
+			updategroupSettings.numWarnToBan = numWarnToBan;
+
+			botDatabase.UpdateGroup(group, updategroupSettings);
+
+			return { "test47", "test47" };
+		}
+		else
+			return { "test37", "test37" };
+	}
+	else
+		return { "42", "42" };
+}
+
+OnEventResult BotController::OnAddWarn(Message::Ptr message)
+{
+	return { "43", "43" };
+}
+
+OnEventResult BotController::OnRemoveWarn(Message::Ptr message)
+{
+	return { "44", "44" };
+}
+
+OnEventResult BotController::OnSetwarn(Message::Ptr message)
+{
+	return { "45", "45" };
+}
+
+OnEventResult BotController::OnViewWarn(Message::Ptr message)
+{
+	return { "46", "46" };
+}
+
 /*
 OnEventResult BotController::OnBan(Message::Ptr message)
 {
@@ -628,23 +724,22 @@ OnEventResult BotController::onMyChatMember(ChatMemberUpdated::Ptr update)
 		RandomNumberGenerator(32),
 		update->chat->type,
 		status == "administrator",
-		false,
+		false },
+			BotDatabase::GroupSettings{
+		update->chat->id,
 		3,
-		5
-			});
+		5 }
+		);
 	}
 	else if (isContains && (status == "member" || status == "administrator"))
 	{
-		botDatabase.UpdateGroup(BotDatabase::Group{
-		update->chat->id,
-		update->chat->title,
-		(*botDatabase.GetGroups().find(update->chat->id)).second.uniqueTitle,
-		update->chat->type,
-		status == "administrator",
-		(*botDatabase.GetGroups().find(update->chat->id)).second.isBotActive,
-		(*botDatabase.GetGroups().find(update->chat->id)).second.numWarnToMute,
-		(*botDatabase.GetGroups().find(update->chat->id)).second.numWarnToBan
-			});
+		const BotDatabase::Group& group = botDatabase.GetGroups().at(update->chat->id);
+		const BotDatabase::GroupSettings& groupSettings = botDatabase.GetGroupsSettings().at(group.id);
+
+		BotDatabase::Group updateGroup = group;
+		updateGroup.isBotAdmin = status == "administrator";
+
+		botDatabase.UpdateGroup(updateGroup, groupSettings);
 	}
 	else if (isContains && (status == "left" || status == "kicked"))
 	{

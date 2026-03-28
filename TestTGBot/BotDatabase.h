@@ -22,26 +22,48 @@ public:
 	BotDatabase();
 	~BotDatabase();
 
-	struct Admin
+	struct DataTable 
+	{
+		auto operator<=>(const DataTable&) const = default;
+	};
+
+	struct Admin : DataTable
 	{
 		int64_t id{};
 		string firstName{}, lastName{}, username{};
 		bool isBot{}, isPremium{}, isBotOwner{};
 
+		Admin() = default;
+
 		Admin(int64_t id, string firstName, string lastName, string username, bool isBot, bool isPremium, bool isBotOwner) 
 			: id(id),  firstName(firstName), lastName(lastName), username(username), isBot(isBot), isPremium(isPremium), isBotOwner(isBotOwner) {}
 	};
 
-	struct Group
+	struct Group : DataTable
 	{
 		int64_t id{};
 		string title{}, uniqueTitle{};
 		Chat::Type type{};
 		bool isBotAdmin{}, isBotActive{};
-		int64_t numWarnToMute{}, numWarnToBan{};
 
-		Group(int64_t id, string title, string uniqueTitle, Chat::Type type, bool isBotAdmin, bool isBotActive, int64_t numWarnToMute, int64_t numWarnToBan)
-			: id(id), title(title), uniqueTitle(uniqueTitle), type(type), isBotAdmin(isBotAdmin), isBotActive(isBotActive), numWarnToMute(numWarnToMute), numWarnToBan(numWarnToBan) {}
+		auto operator<=>(const Group&) const = default;
+
+		Group() = default;
+
+		Group(int64_t id, string title, string uniqueTitle, Chat::Type type, bool isBotAdmin, bool isBotActive)
+			: id(id), title(title), uniqueTitle(uniqueTitle), type(type), isBotAdmin(isBotAdmin), isBotActive(isBotActive) {}
+	};
+
+	struct GroupSettings : DataTable
+	{
+		int64_t id{}, numWarnToMute{}, numWarnToBan{};
+
+		auto operator<=>(const GroupSettings&) const = default;
+
+		GroupSettings() = default;
+
+		GroupSettings(int64_t id, int64_t numWarnToMute, int64_t numWarnToBan)
+			: id(id), numWarnToMute(numWarnToMute), numWarnToBan(numWarnToBan) {}
 	};
 
 	void Open(const string& pathToDatabase);
@@ -59,28 +81,20 @@ public:
 	void UpdateAdmin(const Admin& admin);
 	void DeleteAdmin(const int64_t id);
 
-	void AddGroup(const Group& group);
-	void UpdateGroup(const Group& group);
+	void AddGroup(const Group& group, const GroupSettings& groupSettings);
+	void UpdateGroup(const Group& group, const GroupSettings& groupSettings);
 	void DeleteGroup(const int64_t id);
 	const unordered_map<int64_t, Group>& GetGroups() const;
+	const unordered_map<int64_t, GroupSettings>& GetGroupsSettings() const;
 	int64_t GroupIdFromUniqueTitle(const string& uniqueTitle) const;
-
 
 private:
 
-	// Adds admin data to the cache. 
-	// The data must not already be in the cache and have an empty username.
-	void AddAdminToCache(const Admin& admin);
-
-	void UpdateAdminToCache(const Admin& admin);
+	void UpsertCache(const Admin& admin);
+	void UpsertCache(const Group& group);
+	void UpsertCache(const GroupSettings& groupSettings);
 
 	void DeleteAdminFromCache(const int64_t id);
-
-	// Adds group data to the cache. 
-	// The data must not already be in the cache.
-	void AddGroupToCache(const Group& group);
-
-	void UpdateGroupToCache(const Group& group);
 
 	// Removes group data from the cache. 
 	// The data must already be in the cache.
@@ -93,9 +107,11 @@ private:
 
 		inline static unordered_map<int64_t, Group> groups{};
 		inline static unordered_map<string, int64_t> groupIdsByUniqueTitle{};
-	};
 
-	struct Table
+		inline static unordered_map<int64_t, GroupSettings> groupsSettings{};
+	};
+	
+	struct TableName
 	{
 		const string_view nameTable;
 		const vector<string_view> columnNames;
@@ -105,7 +121,20 @@ private:
 		string GetColumnsEqualPlaceholders() const;
 	};
 
-	struct GroupsTable : Table
+	struct BotAdminsTableName : TableName
+	{
+		static constexpr string_view idColumnName				= "Id";
+		static constexpr string_view firstNameColumnName		= "FirstName";
+		static constexpr string_view lastNameColumnName			= "LastName";
+		static constexpr string_view usernameColumnName			= "Username";
+		static constexpr string_view isBotColumnName			= "IsBot";
+		static constexpr string_view isPremiumColumnName		= "IsPremium";
+		static constexpr string_view isBotOwnerColumnName		= "IsBotOwner";
+
+		BotAdminsTableName() : TableName{ "BotAdmins", {idColumnName, firstNameColumnName, lastNameColumnName, usernameColumnName, isBotColumnName, isPremiumColumnName, isBotOwnerColumnName} } {};
+	};
+
+	struct GroupsTableName : TableName
 	{
 		static constexpr string_view idColumnName				= "Id";
 		static constexpr string_view titleColumnName			= "Title";
@@ -113,31 +142,27 @@ private:
 		static constexpr string_view typeColumnName				= "Type";
 		static constexpr string_view isBotAdminColumnName		= "IsBotAdmin";
 		static constexpr string_view isBotActiveColumnName		= "IsBotActive";
+
+		GroupsTableName() : TableName{ "Groups", {idColumnName, titleColumnName, uniqueTitleColumnName, typeColumnName, isBotAdminColumnName, isBotActiveColumnName} } {};
+	};
+
+	struct GroupsSettingsTableName : TableName
+	{
+		static constexpr string_view idColumnName				= "Id";
 		static constexpr string_view numWarnToMuteColumnName	= "NumWarnToMute";
 		static constexpr string_view numWarnToBanColumnName		= "NumWarnToBan";
 
-		GroupsTable() : Table{ "Groups", {idColumnName, titleColumnName, uniqueTitleColumnName, typeColumnName, isBotAdminColumnName, isBotActiveColumnName, numWarnToMuteColumnName, numWarnToBanColumnName} } {};
+		GroupsSettingsTableName() : TableName{ "GroupsSettings", {idColumnName, numWarnToMuteColumnName, numWarnToBanColumnName} } {};
 	};
 
-	struct BotAdminsTable : Table
-	{
-		static constexpr string_view idColumnName			= "Id";
-		static constexpr string_view firstNameColumnName	= "FirstName";
-		static constexpr string_view lastNameColumnName		= "LastName";
-		static constexpr string_view usernameColumnName		= "Username";
-		static constexpr string_view isBotColumnName		= "IsBot";
-		static constexpr string_view isPremiumColumnName	= "IsPremium";
-		static constexpr string_view isBotOwnerColumnName	= "IsBotOwner";
+	inline static const BotAdminsTableName  botAdminsTableName{};
+	inline static const GroupsTableName  groupsTableName{};
+	inline static const GroupsSettingsTableName  groupsSettingsTableName{};
 
-		BotAdminsTable() : Table{ "BotAdmins", {idColumnName, firstNameColumnName, lastNameColumnName, usernameColumnName, isBotColumnName, isPremiumColumnName, isBotOwnerColumnName} } {};
-	};
-
-	inline static const BotAdminsTable BotAdmins{};
-	inline static const GroupsTable Groups{};
-
-	const vector<const Table*> tables{
-		&BotAdmins,
-		&Groups
+	const vector<const TableName*> tables{
+		&botAdminsTableName ,
+		&groupsTableName ,
+		&groupsSettingsTableName
 	};
 
 	unique_ptr<SQLite::Database> botDatabase{};

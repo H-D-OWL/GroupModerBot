@@ -17,6 +17,10 @@ void BotDatabase::Open(const string& pathToDatabase)
 		throw SQLite::Exception("database is already open");
 
 	botDatabase = make_unique<SQLite::Database>(pathToDatabase, SQLite::OPEN_READWRITE);
+
+	SQLite::Statement query{ *botDatabase, "PRAGMA foreign_keys = ON" };
+
+	query.exec();
 }
 
 void BotDatabase::CheckStructure() const
@@ -44,43 +48,62 @@ void BotDatabase::CheckStructure() const
 
 void BotDatabase::CacheLoad()
 {
-	SQLite::Statement adminsQuery{ *botDatabase, 
-		"SELECT " 
-		+ BotAdmins.GetColumnNamesBetweenCommas() 
-		+ " FROM " 
-		+ string(BotAdmins.nameTable) };
-
-	while (adminsQuery.executeStep())
 	{
-		AddAdminToCache(Admin{
-		adminsQuery.getColumn(0).getInt64(),
-		adminsQuery.getColumn(1).getString(),
-		adminsQuery.getColumn(2).getString(),
-		adminsQuery.getColumn(3).getString(),
-		static_cast<bool>(adminsQuery.getColumn(4).getInt64()),
-		static_cast<bool>(adminsQuery.getColumn(5).getInt64()),
-		static_cast<bool>(adminsQuery.getColumn(6).getInt64())
-			});
+		SQLite::Statement adminsQuery{ *botDatabase,
+			"SELECT "
+			+ botAdminsTableName.GetColumnNamesBetweenCommas()
+			+ " FROM "
+			+ string(botAdminsTableName.nameTable) };
+
+		while (adminsQuery.executeStep())
+		{
+			UpsertCache(Admin{
+			adminsQuery.getColumn(0).getInt64(),
+			adminsQuery.getColumn(1).getString(),
+			adminsQuery.getColumn(2).getString(),
+			adminsQuery.getColumn(3).getString(),
+			static_cast<bool>(adminsQuery.getColumn(4).getInt64()),
+			static_cast<bool>(adminsQuery.getColumn(5).getInt64()),
+			static_cast<bool>(adminsQuery.getColumn(6).getInt64())
+				});
+		}
 	}
 
-	SQLite::Statement groupsQuery{ *botDatabase, 
-		"SELECT " 
-		+ Groups.GetColumnNamesBetweenCommas() 
-		+ " FROM " 
-		+ string(Groups.nameTable) };
-
-	while (groupsQuery.executeStep())
 	{
-		AddGroupToCache(Group{
-		groupsQuery.getColumn(0).getInt64(),
-		groupsQuery.getColumn(1).getString(),
-		groupsQuery.getColumn(2).getString(),
-		static_cast<Chat::Type>(groupsQuery.getColumn(3).getInt64()),
-		static_cast<bool>(groupsQuery.getColumn(4).getInt64()),
-		static_cast<bool>(groupsQuery.getColumn(5).getInt64()),
-		groupsQuery.getColumn(6).getInt64(),
-		groupsQuery.getColumn(7).getInt64() 
-			});
+		SQLite::Statement groupsQuery{ *botDatabase,
+			"SELECT "
+			+ groupsTableName.GetColumnNamesBetweenCommas()
+			+ " FROM "
+			+ string(groupsTableName.nameTable) };
+
+		while (groupsQuery.executeStep())
+		{
+			UpsertCache(Group{
+			groupsQuery.getColumn(0).getInt64(),
+			groupsQuery.getColumn(1).getString(),
+			groupsQuery.getColumn(2).getString(),
+			static_cast<Chat::Type>(groupsQuery.getColumn(3).getInt64()),
+			static_cast<bool>(groupsQuery.getColumn(4).getInt64()),
+			static_cast<bool>(groupsQuery.getColumn(5).getInt64()),
+				});
+		}
+	}
+
+	{
+		SQLite::Statement groupsSettingsQuery{ *botDatabase,
+		"SELECT "
+		+ groupsSettingsTableName.GetColumnNamesBetweenCommas()
+		+ " FROM "
+		+ string(groupsSettingsTableName.nameTable) };
+
+		while (groupsSettingsQuery.executeStep())
+		{
+			UpsertCache(GroupSettings{
+			groupsSettingsQuery.getColumn(0).getInt64(),
+			groupsSettingsQuery.getColumn(1).getInt64(),
+			groupsSettingsQuery.getColumn(2).getInt64(),
+				});
+		}
 	}
 }
 
@@ -108,11 +131,11 @@ void BotDatabase::AddAdmin(const Admin& user)
 
 	SQLite::Statement query{ *botDatabase, 
 		"INSERT INTO " 
-		+ string(BotAdmins.nameTable) 
+		+ string(botAdminsTableName.nameTable)
 		+ " (" 
-		+ BotAdmins.GetColumnNamesBetweenCommas() 
+		+ botAdminsTableName.GetColumnNamesBetweenCommas()
 		+ ") VALUES(" 
-		+ BotAdmins.GetPlaceholders() 
+		+ botAdminsTableName.GetPlaceholders()
 		+ ')'};
 
 	query.bind(1, user.id);
@@ -125,7 +148,7 @@ void BotDatabase::AddAdmin(const Admin& user)
 
 	query.exec();
 
-	AddAdminToCache(user);
+	UpsertCache(user);
 }
 
 void BotDatabase::UpdateAdmin(const Admin& admin)
@@ -135,11 +158,11 @@ void BotDatabase::UpdateAdmin(const Admin& admin)
 
 	SQLite::Statement query{ *botDatabase,
 		"UPDATE "
-		+ string(BotAdmins.nameTable)
+		+ string(botAdminsTableName.nameTable)
 		+ " SET "
-		+ BotAdmins.GetColumnsEqualPlaceholders()
+		+ botAdminsTableName.GetColumnsEqualPlaceholders()
 		+ " WHERE "
-		+ string(BotAdmins.idColumnName)
+		+ string(botAdminsTableName.idColumnName)
 		+ " = "
 		+ to_string(admin.id) };
 
@@ -153,7 +176,7 @@ void BotDatabase::UpdateAdmin(const Admin& admin)
 
 	query.exec();
 
-	UpdateAdminToCache(admin);
+	UpsertCache(admin);
 }
 
 void BotDatabase::DeleteAdmin(const int64_t id)
@@ -163,9 +186,9 @@ void BotDatabase::DeleteAdmin(const int64_t id)
 
 	SQLite::Statement query{ *botDatabase,
 	"DELETE FROM "
-	+ string(BotAdmins.nameTable)
+	+ string(botAdminsTableName.nameTable)
 	+ " WHERE "
-	+ string(BotAdmins.idColumnName)
+	+ string(botAdminsTableName.idColumnName)
 	+ " = ?" };
 
 	query.bind(1, id);
@@ -174,7 +197,7 @@ void BotDatabase::DeleteAdmin(const int64_t id)
 	DeleteAdminFromCache(id);
 }
 
-void BotDatabase::AddGroup(const Group& group)
+void BotDatabase::AddGroup(const Group& group, const GroupSettings& groupSettings)
 {
 	if (Cache.groups.contains(group.id))
 		throw SQLite::Exception("group \"" + group.title + "\" already exists");
@@ -182,29 +205,47 @@ void BotDatabase::AddGroup(const Group& group)
 	if (Cache.groupIdsByUniqueTitle.contains(group.uniqueTitle))
 		throw SQLite::Exception("group with unique title \"" + group.uniqueTitle + "\" already exists");
 
-	SQLite::Statement queryToAddGroup{ *botDatabase, 
-		"INSERT INTO " 
-		+ string(Groups.nameTable) 
-		+ " (" + Groups.GetColumnNamesBetweenCommas() 
-		+ ") VALUES(" 
-		+ Groups.GetPlaceholders() 
-		+ ')' };
+	{
+		SQLite::Statement query{ *botDatabase,
+			"INSERT INTO "
+			+ string(groupsTableName.nameTable)
+			+ " (" + groupsTableName.GetColumnNamesBetweenCommas()
+			+ ") VALUES("
+			+ groupsTableName.GetPlaceholders()
+			+ ')' };
 
-	queryToAddGroup.bind(1, group.id);
-	queryToAddGroup.bind(2, group.title);
-	queryToAddGroup.bind(3, group.uniqueTitle);
-	queryToAddGroup.bind(4, static_cast<int64_t>(group.type));
-	queryToAddGroup.bind(5, static_cast<int64_t>(group.isBotAdmin));
-	queryToAddGroup.bind(6, static_cast<int64_t>(group.isBotActive));
-	queryToAddGroup.bind(7, group.numWarnToMute);
-	queryToAddGroup.bind(8, group.numWarnToBan);
+		query.bind(1, group.id);
+		query.bind(2, group.title);
+		query.bind(3, group.uniqueTitle);
+		query.bind(4, static_cast<int64_t>(group.type));
+		query.bind(5, static_cast<int64_t>(group.isBotAdmin));
+		query.bind(6, static_cast<int64_t>(group.isBotActive));
 
-	queryToAddGroup.exec();
+		query.exec();
 
-	AddGroupToCache(group);
+		UpsertCache(group);
+	}
+
+	{
+		SQLite::Statement query{ *botDatabase,
+			"INSERT INTO "
+			+ string(groupsSettingsTableName.nameTable)
+			+ " (" + groupsSettingsTableName.GetColumnNamesBetweenCommas()
+			+ ") VALUES("
+			+ groupsSettingsTableName.GetPlaceholders()
+			+ ')' };
+
+		query.bind(1, groupSettings.id);
+		query.bind(2, groupSettings.numWarnToMute);
+		query.bind(3, groupSettings.numWarnToBan);
+
+		query.exec();
+
+		UpsertCache(groupSettings);
+	}
 }
 
-void BotDatabase::UpdateGroup(const Group& group)
+void BotDatabase::UpdateGroup(const Group& group, const GroupSettings& groupSettings)
 {
 	if (!Cache.groups.contains(group.id))
 		throw SQLite::Exception("group \"" + group.uniqueTitle + "\" does not exists");
@@ -215,33 +256,60 @@ void BotDatabase::UpdateGroup(const Group& group)
 	if (const auto it = Cache.groupIdsByUniqueTitle.find(group.uniqueTitle); it != Cache.groupIdsByUniqueTitle.end() && it->second != group.id)
 		throw SQLite::Exception("group with unique title \"" + group.uniqueTitle + "\" already exists");
 
-	SQLite::Statement query{ *botDatabase, 
-		"UPDATE " 
-		+ string(Groups.nameTable) 
-		+ " SET " 
-		+ Groups.GetColumnsEqualPlaceholders() 
-		+ " WHERE " 
-		+ string(Groups.idColumnName) 
-		+ " = " 
-		+ to_string(group.id)};
+	if(Cache.groups.at(group.id) != group)
+	{
+		SQLite::Statement query{ *botDatabase,
+			"UPDATE "
+			+ string(groupsTableName.nameTable)
+			+ " SET "
+			+ groupsTableName.GetColumnsEqualPlaceholders()
+			+ " WHERE "
+			+ string(groupsTableName.idColumnName)
+			+ " = "
+			+ to_string(group.id) };
 
-	query.bind(1, group.id);
-	query.bind(2, group.title);
-	query.bind(3, group.uniqueTitle);
-	query.bind(4, static_cast<int64_t>(group.type));
-	query.bind(5, static_cast<int64_t>(group.isBotAdmin));
-	query.bind(6, static_cast<int64_t>(group.isBotActive));
-	query.bind(7, group.numWarnToMute);
-	query.bind(8, group.numWarnToBan);
+		query.bind(1, group.id);
+		query.bind(2, group.title);
+		query.bind(3, group.uniqueTitle);
+		query.bind(4, static_cast<int64_t>(group.type));
+		query.bind(5, static_cast<int64_t>(group.isBotAdmin));
+		query.bind(6, static_cast<int64_t>(group.isBotActive));
 
-	query.exec();
+		query.exec();
 
-	UpdateGroupToCache(group);
+		UpsertCache(group);
+	}
+
+	if(Cache.groupsSettings.at(groupSettings.id) != groupSettings)
+	{
+		SQLite::Statement query{ *botDatabase,
+			"UPDATE "
+			+ string(groupsSettingsTableName.nameTable)
+			+ " SET "
+			+ groupsSettingsTableName.GetColumnsEqualPlaceholders()
+			+ " WHERE "
+			+ string(groupsSettingsTableName.idColumnName)
+			+ " = "
+			+ to_string(groupSettings.id) };
+
+		query.bind(1, groupSettings.id);
+		query.bind(2, groupSettings.numWarnToMute);
+		query.bind(3, groupSettings.numWarnToBan);
+
+		query.exec();
+
+		UpsertCache(groupSettings);
+	}
 }
 
 const unordered_map<int64_t, BotDatabase::Group>& BotDatabase::GetGroups() const
 {
 	return Cache.groups;
+}
+
+const unordered_map<int64_t, BotDatabase::GroupSettings>& BotDatabase::GetGroupsSettings() const
+{
+	return Cache.groupsSettings;
 }
 
 int64_t BotDatabase::GroupIdFromUniqueTitle(const string& uniqueTitle) const
@@ -265,9 +333,9 @@ void BotDatabase::DeleteGroup(const int64_t id)
 
 	SQLite::Statement query{ *botDatabase, 
 		"DELETE FROM " 
-		+ string(Groups.nameTable) 
+		+ string(groupsTableName.nameTable)
 		+ " WHERE " 
-		+ string(Groups.idColumnName) 
+		+ string(groupsTableName.idColumnName)
 		+ " = ?" };
 
 	query.bind(1, id);
@@ -310,16 +378,37 @@ size_t BotDatabase::GetNumberAdmins() const
 	return Cache.admins.size();
 }
 
-void BotDatabase::AddAdminToCache(const Admin& admin)
+void BotDatabase::UpsertCache(const Admin& admin)
 {
-	const bool emplaceAdmin = Cache.admins.try_emplace(admin.id, admin).second;
-
-	assert(emplaceAdmin && "Cache desync");
+	Cache.admins[admin.id] = admin;
 }
 
-void BotDatabase::UpdateAdminToCache(const Admin& admin)
+void BotDatabase::UpsertCache(const Group& group)
 {
-	Cache.admins.at(admin.id) = admin;
+	auto it = Cache.groups.find(group.id);
+
+	if (it != Cache.groups.end())
+	{
+		if (it->second.uniqueTitle != group.uniqueTitle)
+		{
+			const bool eraceUniqueTitle = Cache.groupIdsByUniqueTitle.erase(it->second.uniqueTitle);
+
+			Cache.groupIdsByUniqueTitle[group.uniqueTitle] = group.id;
+
+			assert(eraceUniqueTitle && "Cache desync");
+		}
+	}
+	else
+	{
+		Cache.groupIdsByUniqueTitle[group.uniqueTitle] = group.id;
+	}
+
+	Cache.groups[group.id] = group;
+}
+
+void BotDatabase::UpsertCache(const GroupSettings& groupSettings)
+{
+	Cache.groupsSettings[groupSettings.id] = groupSettings;
 }
 
 void BotDatabase::DeleteAdminFromCache(const int64_t id)
@@ -329,32 +418,16 @@ void BotDatabase::DeleteAdminFromCache(const int64_t id)
 	assert(eraseAdmin && "Cache desync");
 }
 
-void BotDatabase::AddGroupToCache(const Group& group)
-{
-	const bool emplaceUniqueTitle = Cache.groupIdsByUniqueTitle.try_emplace(group.uniqueTitle, group.id).second;
-	const bool emplaceGroup = Cache.groups.try_emplace(group.id, group).second;
-
-	assert(emplaceUniqueTitle && emplaceGroup && "Cache desync");
-}
-
-void BotDatabase::UpdateGroupToCache(const Group& group)
-{
-	const bool eraceUniqueTitle = Cache.groupIdsByUniqueTitle.erase(Cache.groups.at(group.id).uniqueTitle);
-	const bool emplaceGroup = Cache.groupIdsByUniqueTitle.try_emplace(group.uniqueTitle, group.id).second;
-
-	Cache.groups.at(group.id) = group;
-
-	assert(eraceUniqueTitle && emplaceGroup && "Cache desync");
-}
-
 void BotDatabase::DeleteGroupFromCache(const int64_t id)
 {
+	const bool eraseGroupIdsByUniqueTitle = Cache.groupIdsByUniqueTitle.erase(Cache.groups.at(id).uniqueTitle);
 	const bool eraseGroup = Cache.groups.erase(id);
+	const bool eraseGroupSettings = Cache.groupsSettings.erase(id);
 
-	assert(eraseGroup && "Cache desync");
+	assert(eraseGroupIdsByUniqueTitle && eraseGroup && eraseGroupSettings && "Cache desync");
 }
 
-string BotDatabase::Table::GetColumnNamesBetweenCommas() const
+string BotDatabase::TableName::GetColumnNamesBetweenCommas() const
 {
 	string AllColumnNames{};
 
@@ -369,7 +442,7 @@ string BotDatabase::Table::GetColumnNamesBetweenCommas() const
 	return AllColumnNames;
 }
 
-string BotDatabase::Table::GetPlaceholders() const
+string BotDatabase::TableName::GetPlaceholders() const
 {
 	string Placeholders{};
 
@@ -383,7 +456,7 @@ string BotDatabase::Table::GetPlaceholders() const
 	return Placeholders;
 }
 
-string BotDatabase::Table::GetColumnsEqualPlaceholders() const
+string BotDatabase::TableName::GetColumnsEqualPlaceholders() const
 {
 	string ColumnsEqualValues{};
 

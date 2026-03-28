@@ -34,10 +34,11 @@ private:
 	OnEventResult OnAddAdmin(Message::Ptr message);
 	OnEventResult OnRemoveAdmin(Message::Ptr message);
 
-	OnEventResult OnSetNumWarnToMute(Message::Ptr message);
-	OnEventResult OnSetNumWarnToBan(Message::Ptr message);
+	OnEventResult OnSetWarnMuteSettings(Message::Ptr message);
+	OnEventResult OnSetWarnBanSettings(Message::Ptr message);
 
-	OnEventResult OnWarn(Message::Ptr message);
+	OnEventResult OnAddWarn(Message::Ptr message);
+	OnEventResult OnRemoveWarn(Message::Ptr message);
 	OnEventResult OnSetwarn(Message::Ptr message);
 	OnEventResult OnViewWarn(Message::Ptr message);
 
