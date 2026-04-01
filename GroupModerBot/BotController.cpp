@@ -32,7 +32,6 @@ BotController::BotController(Bot& bot, BotDatabase& botDatabase) : bot(bot), bot
 	bot.getEvents().onCommand("viewWarn",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "viewWarn"),			[&](){ return OnViewWarn(message); }); });
 	
 	bot.getEvents().onMyChatMember	(					[this](ChatMemberUpdated::Ptr update)	{ SafeExecute(ContextLog::ToContextLog(update,	"changeMyChatMember"),	[&](){ return onMyChatMember(update); }); });
-
 }
 
 void BotController::Run()

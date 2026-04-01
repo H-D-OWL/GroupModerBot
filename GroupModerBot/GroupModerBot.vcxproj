@@ -24,6 +24,7 @@
     <ProjectGuid>{d3c24767-4ae6-45d9-820c-6012e983023d}</ProjectGuid>
     <RootNamespace>TestTGBot</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>GroupModerBot</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -174,7 +175,7 @@
     <ClCompile Include="BotController.cpp" />
     <ClCompile Include="BotDatabase.cpp" />
     <ClCompile Include="logging.cpp" />
-    <ClCompile Include="TestTGBot.cpp" />
+    <ClCompile Include="GroupModerBot.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BotController.h" />

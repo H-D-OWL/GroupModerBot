@@ -1,2 +1,0 @@
-DbPath=C:\Users\Dima02\Desktop\Database\TestDBForTgBot.db
-BotToken=8365490507:AAEzaKRZSixqexC2IqnAvFRjWzmoekhKoGY
