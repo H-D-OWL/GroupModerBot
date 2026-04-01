@@ -11,6 +11,9 @@
 #include "BotDatabase.h"
 #include "logging.h"
 
+#include <future>
+#include <thread>
+
 /*
 * 	1. Obtaining a token and database path from the DataForBot.txt file.
 * 	2. Verifying the database path and the presence of all necessary tables and columns, and verifying the token.
@@ -31,7 +34,7 @@ int main()
 	{
 		SetConsoleOutputCP(CP_UTF8);
 		SetConsoleCP(CP_UTF8);
-		
+
 		ifstream fileDataForBot("DataForBot.txt", ios_base::in);
 
 		if (!fileDataForBot.is_open())
@@ -57,9 +60,9 @@ int main()
 		}
 
 		fileDataForBot.close();
-		
+
 		///
-		
+
 		BotDatabase botDatabase;
 
 		botDatabase.Open(dbPath);
@@ -70,9 +73,22 @@ int main()
 
 		botDatabase.CacheLoad();
 		Log(LogSource::Database, LogType::Event, "data from database: \"" + dbPath.substr(dbPath.rfind('\\') + 1) + "\" has been loaded into cache");
-		
+
 		///
+
+		//TODO Debug check.
+		Bot bot2("8231301649:AAEtgMiY1ukuwycs5RWus5IDVfQbrHv7BKo");
 		
+		try
+		{
+			bot2.getApi().sendMessage(-1003528493878, "test text");
+		}
+		catch (const TgException& e)
+		{
+			Log(LogSource::Bot, LogType::FatalError, e.what());
+		}
+		//-1003528493878
+
 		Bot bot(botToken);
 
 		if (bot.getToken().empty())

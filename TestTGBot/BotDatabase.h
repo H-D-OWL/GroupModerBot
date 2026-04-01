@@ -19,8 +19,6 @@ using namespace logging;
 class BotDatabase
 {
 public:
-	BotDatabase();
-	~BotDatabase();
 
 	struct DataTable 
 	{
@@ -87,6 +85,11 @@ public:
 	const unordered_map<int64_t, Group>& GetGroups() const;
 	const unordered_map<int64_t, GroupSettings>& GetGroupsSettings() const;
 	int64_t GroupIdFromUniqueTitle(const string& uniqueTitle) const;
+
+	void SetWarns(const int64_t userId, const int64_t groupId, const int64_t warns);
+	void DeleteWarns(const int64_t userId, const int64_t groupId) const;
+	int64_t GetWarns(const int64_t userId, const int64_t groupId) const;
+
 
 private:
 
@@ -155,14 +158,25 @@ private:
 		GroupsSettingsTableName() : TableName{ "GroupsSettings", {idColumnName, numWarnToMuteColumnName, numWarnToBanColumnName} } {};
 	};
 
+	struct UsersWarningsTableName : TableName
+	{
+		static constexpr string_view idColumnName = "Id";
+		static constexpr string_view groupIdColumnName = "GroupId";
+		static constexpr string_view quantityWarnColumnName = "QuantityWarn";
+
+		UsersWarningsTableName() : TableName{ "UsersWarnings", {idColumnName, groupIdColumnName, quantityWarnColumnName} } {};
+	};
+
 	inline static const BotAdminsTableName  botAdminsTableName{};
 	inline static const GroupsTableName  groupsTableName{};
 	inline static const GroupsSettingsTableName  groupsSettingsTableName{};
+	inline static const UsersWarningsTableName  usersWarningsTableName{};
 
 	const vector<const TableName*> tables{
-		&botAdminsTableName ,
-		&groupsTableName ,
-		&groupsSettingsTableName
+		&botAdminsTableName,
+		&groupsTableName,
+		&groupsSettingsTableName,
+		&usersWarningsTableName
 	};
 
 	unique_ptr<SQLite::Database> botDatabase{};

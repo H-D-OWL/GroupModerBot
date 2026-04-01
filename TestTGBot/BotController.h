@@ -37,16 +37,8 @@ private:
 	OnEventResult OnSetWarnMuteSettings(Message::Ptr message);
 	OnEventResult OnSetWarnBanSettings(Message::Ptr message);
 
-	OnEventResult OnAddWarn(Message::Ptr message);
-	OnEventResult OnRemoveWarn(Message::Ptr message);
-	OnEventResult OnSetwarn(Message::Ptr message);
+	OnEventResult OnSetWarn(Message::Ptr message);
 	OnEventResult OnViewWarn(Message::Ptr message);
-
-
-	//OnEventResult OnBan(Message::Ptr message);
-	//OnEventResult OnUnban(Message::Ptr message);
-	//OnEventResult OnMute(Message::Ptr message);
-	//OnEventResult OnUnmute(Message::Ptr message);
 
 	OnEventResult OnNonCommand(Message::Ptr message);
 	OnEventResult onMyChatMember(ChatMemberUpdated::Ptr update);
@@ -107,6 +99,8 @@ private:
 	bool isSystemMessage(const Message::Ptr& message);
 
 	[[nodiscard]] string CleaningUpLateralSpaces(const string_view text);
+
+	 int64_t Fibonacci(const size_t numberOfNumber) const;
 
 	//Generates a string of random characters from 0 to 9 of the specified length.
 	string RandomNumberGenerator(const size_t length);

@@ -26,15 +26,10 @@ BotController::BotController(Bot& bot, BotDatabase& botDatabase) : bot(bot), bot
 	bot.getEvents().onCommand("setWarnMuteSettings",	[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "setWarnMuteSettings"),	[&](){ return OnSetWarnMuteSettings(message); }); });
 	bot.getEvents().onCommand("setWarnBanSettings",		[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "setWarnBanSettings"),	[&](){ return OnSetWarnBanSettings(message); }); });
 
-	bot.getEvents().onCommand("addWarn",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "addWarn"),				[&]() { return OnAddWarn(message); }); });
-	bot.getEvents().onCommand("removeWarn",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "removeWarn"),			[&]() { return OnRemoveWarn(message); }); });
-	bot.getEvents().onCommand("setWarn",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "setWarn"),				[&]() { return OnSetwarn(message); }); });
-	bot.getEvents().onCommand("viewWarn",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "viewWarn"),			[&]() { return OnViewWarn(message); }); });
-
-	//bot.getEvents().onCommand("ban",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "ban"),					[&](){ return OnBan(message); }); });
-	//bot.getEvents().onCommand("unban",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "unban"),				[&](){ return OnUnban(message); }); });
-	//bot.getEvents().onCommand("mute",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "mute"),				[&](){ return OnMute(message); }); });
-	//bot.getEvents().onCommand("unmute",					[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "unmute"),				[&](){ return OnUnmute(message); }); });
+	bot.getEvents().onCommand("addWarn",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "addWarn"),				[&](){ return OnSetWarn(message); }); });
+	bot.getEvents().onCommand("removeWarn",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "removeWarn"),			[&](){ return OnSetWarn(message); }); });
+	bot.getEvents().onCommand("setWarn",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "setWarn"),				[&](){ return OnSetWarn(message); }); });
+	bot.getEvents().onCommand("viewWarn",				[this](Message::Ptr message)			{ SafeExecute(ContextLog::ToContextLog(message, "viewWarn"),			[&](){ return OnViewWarn(message); }); });
 	
 	bot.getEvents().onMyChatMember	(					[this](ChatMemberUpdated::Ptr update)	{ SafeExecute(ContextLog::ToContextLog(update,	"changeMyChatMember"),	[&](){ return onMyChatMember(update); }); });
 
@@ -429,7 +424,7 @@ OnEventResult BotController::OnSetWarnMuteSettings(Message::Ptr message)
 {
 	if (message->chat->type == Chat::Type::Private)
 	{
-		if (botDatabase.IsOwner(message->from->id) || botDatabase.IsAdmin(message->from->id))
+		if (botDatabase.IsAdmin(message->from->id))
 		{
 			stringstream commandParameters(message->text.substr("/setWarnMuteSettings"sv.size()));
 
@@ -469,7 +464,7 @@ OnEventResult BotController::OnSetWarnBanSettings(Message::Ptr message)
 {
 	if (message->chat->type == Chat::Type::Private)
 	{
-		if (botDatabase.IsOwner(message->from->id) || botDatabase.IsAdmin(message->from->id))
+		if (botDatabase.IsAdmin(message->from->id))
 		{
 			stringstream commandParameters(message->text.substr("/setWarnBanSettings"sv.size()));
 
@@ -505,23 +500,185 @@ OnEventResult BotController::OnSetWarnBanSettings(Message::Ptr message)
 		return { "42", "42" };
 }
 
-OnEventResult BotController::OnAddWarn(Message::Ptr message)
+OnEventResult BotController::OnSetWarn(Message::Ptr message)
 {
-	return { "43", "43" };
-}
+	if (message->chat->type == Chat::Type::Private) return { "43", "43" };
 
-OnEventResult BotController::OnRemoveWarn(Message::Ptr message)
-{
-	return { "44", "44" };
-}
+	if (!botDatabase.IsAdmin(message->from->id)) return { "44", "44" };
 
-OnEventResult BotController::OnSetwarn(Message::Ptr message)
-{
-	return { "45", "45" };
+	const auto replyToMessage = message->replyToMessage;
+
+	if (!replyToMessage) return { "45", "45" };
+
+	if (botDatabase.IsAdmin(replyToMessage->from->id)) return { "46", "46" };
+	
+	stringstream commandParameters(message->text);
+
+	string comand{};
+
+	if (!(commandParameters >> comand)) return { "53", "53" };
+	
+	const BotDatabase::GroupSettings& groupSettings = botDatabase.GetGroupsSettings().at(message->chat->id);
+
+	const string memberStatus = bot.getApi().getChatMember(groupSettings.id, replyToMessage->from->id)->status;
+
+	if (memberStatus == "left") return { "56", "56" };
+	
+	const int64_t previousQuantityWarn = botDatabase.GetWarns(replyToMessage->from->id, groupSettings.id);
+
+	int64_t newQuantityWarns = 0, arg = 0;
+
+	if (comand == "/addWarn")
+	{
+		if (!(commandParameters >> arg)) arg = 1;
+
+		newQuantityWarns = previousQuantityWarn + arg;
+	}
+	else if (comand == "/removeWarn")
+	{
+		if (!(commandParameters >> arg)) arg = 1;
+
+		newQuantityWarns = previousQuantityWarn - arg;
+	}
+	else if (comand == "/setWarn")
+	{
+		if (!(commandParameters >> newQuantityWarns)) return { "54", "54" };
+	}
+	else
+		return { "52", "52" };
+
+	newQuantityWarns = max(0ll, newQuantityWarns);
+
+	if (newQuantityWarns == 0)
+		botDatabase.DeleteWarns(replyToMessage->from->id, groupSettings.id);
+	else
+		botDatabase.SetWarns(replyToMessage->from->id, groupSettings.id, newQuantityWarns);
+
+	if (newQuantityWarns >= groupSettings.numWarnToBan && groupSettings.numWarnToBan > 0)
+	{
+		if (memberStatus == "kicked") return { "55", "55" };
+
+		if (!bot.getApi().banChatMember(replyToMessage->chat->id, replyToMessage->from->id)) 
+		{
+			botDatabase.SetWarns(replyToMessage->from->id, groupSettings.id, previousQuantityWarn);
+
+			return { "50", "50" };
+		}
+		
+		//bot.getApi().deleteMessage(replyToMessage->chat->id, replyToMessage->messageId);
+		//bot.getApi().deleteMessage(message->chat->id, message->messageId);
+
+		return { "51", "51" };
+	}
+	else if (newQuantityWarns >= groupSettings.numWarnToMute && newQuantityWarns < groupSettings.numWarnToBan && groupSettings.numWarnToMute > 0)
+	{
+		if (newQuantityWarns > previousQuantityWarn || (newQuantityWarns < previousQuantityWarn && memberStatus == "restricted"))
+		{
+			ChatPermissions::Ptr permissions{ new ChatPermissions };
+
+			permissions->canSendMessages = false;
+			permissions->canSendOtherMessages = false;
+			permissions->canSendAudios = false;
+			permissions->canSendDocuments = false;
+			permissions->canSendPhotos = false;
+			permissions->canSendPolls = false;
+			permissions->canSendVideoNotes = false;
+			permissions->canSendVideos = false;
+			permissions->canSendVoiceNotes = false;
+			permissions->canAddWebPagePreviews = false;
+
+			auto untilTimePoint = chrono::system_clock::now() + chrono::hours(Fibonacci(newQuantityWarns - groupSettings.numWarnToMute) * 24);
+
+			time_t untilTimestamp = chrono::system_clock::to_time_t(untilTimePoint);
+
+			if (!bot.getApi().restrictChatMember(replyToMessage->chat->id, replyToMessage->from->id, permissions, untilTimestamp)) 
+			{
+				botDatabase.SetWarns(replyToMessage->from->id, groupSettings.id, previousQuantityWarn);
+
+				return { "48", "48" };
+			}
+			
+			return { "49", "49" };
+		}
+		else if(newQuantityWarns < previousQuantityWarn)
+		{
+			if (memberStatus != "kicked") return { "63", "63" };
+
+			if (!bot.getApi().unbanChatMember(replyToMessage->chat->id, replyToMessage->from->id, true)) 
+			{
+				botDatabase.SetWarns(replyToMessage->from->id, groupSettings.id, previousQuantityWarn);
+
+				return { "62", "62" };
+			}
+
+			return { "58", "58" };
+		}
+		else
+			return { "61", "61" };
+	}
+	else if (newQuantityWarns < groupSettings.numWarnToMute)
+	{
+		if(memberStatus == "restricted")
+		{
+			ChatPermissions::Ptr permissions{ new ChatPermissions };
+
+			permissions->canSendMessages = true;
+			permissions->canSendOtherMessages = true;
+			permissions->canSendAudios = true;
+			permissions->canSendDocuments = true;
+			permissions->canSendPhotos = true;
+			permissions->canSendPolls = true;
+			permissions->canSendVideoNotes = true;
+			permissions->canSendVideos = true;
+			permissions->canSendVoiceNotes = true;
+			permissions->canAddWebPagePreviews = true;
+
+			if (!bot.getApi().restrictChatMember(replyToMessage->chat->id, replyToMessage->from->id, permissions)) 
+			{
+				botDatabase.SetWarns(replyToMessage->from->id, groupSettings.id, previousQuantityWarn);
+
+				return { "60", "60" };
+			}
+			
+			return { "47", "47" };
+		}
+		else if (memberStatus == "kicked")
+		{
+			if (!bot.getApi().unbanChatMember(replyToMessage->chat->id, replyToMessage->from->id, true))
+			{
+				botDatabase.SetWarns(replyToMessage->from->id, groupSettings.id, previousQuantityWarn);
+
+				return { "64", "64" };
+			}
+			
+			return { "65", "65" };
+		}
+		else
+			return { "66", "66" };
+	}
+	else
+		return { "59", "59" };
 }
 
 OnEventResult BotController::OnViewWarn(Message::Ptr message)
 {
+	if (message->chat->type == Chat::Type::Private) return { "67", "67" };
+
+	if (!botDatabase.IsAdmin(message->from->id)) return { "68", "68" };
+
+	const auto replyToMessage = message->replyToMessage;
+
+	if (!replyToMessage) return { "69", "69" };
+
+	string textMessage{};
+
+	textMessage += replyToMessage->from->firstName;
+	textMessage += " has ";
+	textMessage += to_string(botDatabase.GetWarns(replyToMessage->from->id, message->from->id));
+	textMessage += " warnings";
+
+	bot.getApi().sendMessage(message->chat->id, textMessage);
+
 	return { "46", "46" };
 }
 
@@ -777,6 +934,22 @@ string BotController::CleaningUpLateralSpaces(const string_view text)
 	const size_t r = text.find_last_not_of(' ');
 
 	return string(text.substr(l, r - l + 1));
+}
+
+int64_t BotController::Fibonacci(const size_t numberOfNumber) const
+{
+	int64_t num = 1, previousNum = 1;
+
+	for (size_t i = 1; i < numberOfNumber; ++i)
+	{
+		const int64_t temp = previousNum;
+
+		previousNum = num;
+
+		num += temp;
+	}
+
+	return num;
 }
 
 string BotController::RandomNumberGenerator(const size_t length)

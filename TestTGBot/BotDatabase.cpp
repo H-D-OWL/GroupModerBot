@@ -1,13 +1,5 @@
 ﻿#include "BotDatabase.h"
 
-BotDatabase::BotDatabase()
-{
-}
-
-BotDatabase::~BotDatabase()
-{
-}
-
 void BotDatabase::Open(const string& pathToDatabase)
 {
 	if(pathToDatabase.empty())
@@ -324,6 +316,72 @@ int64_t BotDatabase::GroupIdFromUniqueTitle(const string& uniqueTitle) const
 	{
 		return 0;
 	}	
+}
+
+void BotDatabase::SetWarns(const int64_t userId, const int64_t groupId, const int64_t warns)
+{
+	SQLite::Statement query{ *botDatabase,
+	"INSERT INTO "
+	+ string(usersWarningsTableName.nameTable)
+	+ " (" + usersWarningsTableName.GetColumnNamesBetweenCommas()
+	+ ") VALUES("
+	+ usersWarningsTableName.GetPlaceholders()
+	+ ") ON CONFLICT("
+	+ string(usersWarningsTableName.idColumnName)
+	+ ','
+	+ string(usersWarningsTableName.groupIdColumnName)
+	+ ") DO UPDATE SET "
+	+ string(usersWarningsTableName.quantityWarnColumnName)
+	+ "=?" };
+
+	query.bind(1, userId);
+	query.bind(2, groupId);
+	query.bind(3, max(0ll, warns));
+
+	query.bind(4, max(0ll, warns));
+
+	query.exec();
+}
+
+void BotDatabase::DeleteWarns(const int64_t userId, const int64_t groupId) const
+{
+	SQLite::Statement query{ *botDatabase,
+	"DELETE FROM "
+	+ string(usersWarningsTableName.nameTable)
+	+ " WHERE "
+	+ string(usersWarningsTableName.idColumnName)
+	+ " = ? AND "
+	+ string(usersWarningsTableName.groupIdColumnName)
+	+ " = ?" };
+
+	query.bind(1, userId);
+	query.bind(2, groupId);
+
+	query.exec();
+}
+
+int64_t BotDatabase::GetWarns(const int64_t userId, const int64_t groupId) const
+{
+	SQLite::Statement query{ *botDatabase,
+	"SELECT "
+	+ string(usersWarningsTableName.quantityWarnColumnName)
+	+ " FROM "
+	+ string(usersWarningsTableName.nameTable) 
+	+ " WHERE "
+	+ string(usersWarningsTableName.idColumnName)
+	+ " = ? AND "
+	+ string(usersWarningsTableName.groupIdColumnName)
+	+ " = ?" };
+
+	query.bind(1, userId);
+	query.bind(2, groupId);
+
+	if (query.executeStep())
+	{
+		return query.getColumn(0).getInt64();
+	}
+
+	return 0;
 }
 
 void BotDatabase::DeleteGroup(const int64_t id)
