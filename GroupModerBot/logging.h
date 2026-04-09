@@ -6,40 +6,40 @@
 
 #include <tgbot/tgbot.h>
 
-using namespace std;
-using namespace TgBot;
-
-namespace logging
+namespace gmb
 {
-	enum class LogSource
+	namespace logging
 	{
-		Program,
-		Database,
-		Bot,
-	};
+		enum class LogSource
+		{
+			Program,
+			Database,
+			Bot,
+		};
 
-	enum class LogType
-	{
-		Event,
-		Error,
-		FatalError,
-	};
+		enum class LogType
+		{
+			Event,
+			Error,
+			FatalError,
+		};
 
-	struct OnEventResult
-	{
-		const string logText, messageText;
-	};
+		struct OnEventResult
+		{	
+			const std::string logMsg, chatMsg{}, groupMsg{};
+		};
 
-	struct ContextLog
-	{
-		const string userId{}, username{}, chatId{}, title{}, сommand{};
+		struct ContextLog
+		{
+			const std::string userId{}, username{}, chatId{}, title{}, сommand{};
 
-		static ContextLog ToContextLog(const Message::Ptr& message, const string_view сommand);
-		static ContextLog ToContextLog(const ChatMemberUpdated::Ptr& update, const string_view сommand);
+			static logging::ContextLog ToContextLog(const TgBot::Message::Ptr& message, const std::string& сommand);
+			static logging::ContextLog ToContextLog(const TgBot::ChatMemberUpdated::Ptr& update, const std::string& сommand);
 
-	};
+		};
 
-	void Log(const LogSource logSource, const LogType logType, const string_view log);
-	void Log(const LogSource logSource, const LogType logType, const ContextLog& contextLog, const string_view logText);
+		void Log(const logging::LogSource logSource, const logging::LogType logType, const std::string_view log);
+		void Log(const logging::LogSource logSource, const logging::LogType logType, const logging::ContextLog& contextLog, const std::string_view logText);
 
+	}
 }

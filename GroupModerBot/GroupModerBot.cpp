@@ -1,6 +1,9 @@
 ﻿#define WIN32_LEAN_AND_MEAN
 
+#ifdef _WIN32
 #include <windows.h>
+#endif
+
 #include <fstream>
 #include <string>
 
@@ -10,52 +13,49 @@
 #include "BotController.h"
 #include "BotDatabase.h"
 #include "logging.h"
+#include "Constants.h"
 
-#include <future>
-#include <thread>
-
-/*
-* 	1. Obtaining a token and database path from the DataForBot.txt file.
-* 	2. Verifying the database path and the presence of all necessary tables and columns, and verifying the token.
-* 	3. Issuing a confirmation code to confirm the bot's first administrator rights.
-* 	4. Configuring the bot via a private Telegram group.
-* 	5. Using group commands (ban, mute, disable chat, etc.).
-database
-
-*/
-
-using namespace std;
-using namespace TgBot;
-using namespace logging;
 
 int main()
 {
 	try
 	{
-		SetConsoleOutputCP(CP_UTF8);
-		SetConsoleCP(CP_UTF8);
+		#ifdef _WIN32
+			SetConsoleOutputCP(CP_UTF8);
+			SetConsoleCP(CP_UTF8);
+		#endif
 
-		ifstream fileDataForBot("DataForBot.txt", ios_base::in);
+		std::ifstream fileDataForBot(std::string(gmb::consts::configFileName), std::ios_base::in);
 
 		if (!fileDataForBot.is_open())
-			throw runtime_error{ "file \"DataForBot.txt\" not found" };
+			throw std::runtime_error{ []() {
+				std::string text = "file \"";
+				text += gmb::consts::configFileName;
+				text += "\" not found";
+				return text;
+				}() };
 
-		Log(LogSource::Program, LogType::Event, "file \"DataForBot.txt\" found");
+		gmb::logging::Log(gmb::logging::LogSource::Program, gmb::logging::LogType::Event, []() {
+			std::string text = "file \"";
+			text += gmb::consts::configFileName;
+			text += "\" found";
+			return text;
+			}());
 
-		string dbPath{ "ERROR" }, botToken{ "ERROR" };
+		std::string dbPath{ gmb::consts::invalidTextData }, botToken{ gmb::consts::invalidTextData };
 
 		while (fileDataForBot.good())
 		{
-			string fileLine{};
+			std::string fileLine{};
 			getline(fileDataForBot, fileLine);
 
-			if (const auto offDbPath = fileLine.find("DbPath="); offDbPath != string::npos)
+			if (const size_t offDbPath = fileLine.find(gmb::consts::dbPathKey); offDbPath != std::string::npos)
 			{
-				dbPath = fileLine.substr(offDbPath + 7);
+				dbPath = fileLine.substr(offDbPath + gmb::consts::dbPathKey.size());
 			}
-			else if (const auto offBotToken = fileLine.find("BotToken="); offBotToken != string::npos)
+			else if (const size_t offBotToken = fileLine.find(gmb::consts::botTokenKey); offBotToken != std::string::npos)
 			{
-				botToken = fileLine.substr(offBotToken + 9);
+				botToken = fileLine.substr(offBotToken + gmb::consts::botTokenKey.size());
 			}
 		}
 
@@ -63,58 +63,80 @@ int main()
 
 		///
 
-		BotDatabase botDatabase;
+		gmb::BotDatabase botDatabase;
+
+		const std::string& dbTitle = dbPath.substr(dbPath.rfind('\\') + 1);
 
 		botDatabase.Open(dbPath);
-		Log(LogSource::Database, LogType::Event, "database: \"" + dbPath.substr(dbPath.rfind('\\') + 1) + "\" found");
+		gmb::logging::Log(gmb::logging::LogSource::Database, gmb::logging::LogType::Event, [&dbTitle]() {
+			std::string text = "database: \"";
+			text += dbTitle;
+			text += "\" found";
+			return text;
+			}());
 
 		botDatabase.CheckStructure();
-		Log(LogSource::Database, LogType::Event, "database: \"" + dbPath.substr(dbPath.rfind('\\') + 1) + "\" has necessary structure");
+		gmb::logging::Log(gmb::logging::LogSource::Database, gmb::logging::LogType::Event, [&dbTitle]() {
+			std::string text = "database: \"";
+			text += dbTitle;
+			text += "\" has necessary structure";
+			return text;
+			}());
 
 		botDatabase.CacheLoad();
-		Log(LogSource::Database, LogType::Event, "data from database: \"" + dbPath.substr(dbPath.rfind('\\') + 1) + "\" has been loaded into cache");
+		gmb::logging::Log(gmb::logging::LogSource::Database, gmb::logging::LogType::Event, [&dbTitle]() {
+			std::string text = "data from database: \"";
+			text += dbTitle;
+			text += "\" has been loaded into cache";
+			return text;
+			}());
 
 		///
 
 		//TODO Debug check.
-		Bot bot2("8231301649:AAEtgMiY1ukuwycs5RWus5IDVfQbrHv7BKo");
-		
+		TgBot::Bot bot2("8231301649:AAEtgMiY1ukuwycs5RWus5IDVfQbrHv7BKo");
+
 		try
 		{
 			bot2.getApi().sendMessage(-1003528493878, "test text");
 		}
-		catch (const TgException& e)
+		catch (const TgBot::TgException& e)
 		{
-			Log(LogSource::Bot, LogType::FatalError, e.what());
+			gmb::logging::Log(gmb::logging::LogSource::Bot, gmb::logging::LogType::FatalError, e.what());
 		}
 		//-1003528493878
 
-		Bot bot(botToken);
+		TgBot::Bot bot(botToken);
 
 		if (bot.getToken().empty())
-			throw runtime_error{ "botToken is invalid" };
+			throw std::runtime_error{ "botToken is invalid" };
 
-		BotController botController{ bot, botDatabase };
+		gmb::BotController botController{ bot, botDatabase };
 
-		Log(LogSource::Bot, LogType::Event, "bot: \"" + bot.getApi().getMe()->username + "\" has been launched");
+		gmb::logging::Log(gmb::logging::LogSource::Bot, gmb::logging::LogType::Event, [&bot]() {
+			std::string text = "bot: \"";
+			text += bot.getApi().getMe()->username;
+			text += "\" has been launched";
+			return text;
+			}());
 
 		botController.Run();
 	}
 	catch (const SQLite::Exception& e)
 	{
-		Log(LogSource::Database, LogType::FatalError, e.what());
+		gmb::logging::Log(gmb::logging::LogSource::Database, gmb::logging::LogType::FatalError, e.what());
 	}
-	catch (const TgException& e)
+	catch (const TgBot::TgException& e)
 	{
-		Log(LogSource::Bot, LogType::FatalError, e.what());
+		gmb::logging::Log(gmb::logging::LogSource::Bot, gmb::logging::LogType::FatalError, e.what());
 	}
-	catch (const exception& e)
+	catch (const std::exception& e)
 	{
-		Log(LogSource::Program, LogType::FatalError, e.what());
+		gmb::logging::Log(gmb::logging::LogSource::Program, gmb::logging::LogType::FatalError, e.what());
 	}
 	catch (...)
 	{
-		Log(LogSource::Program, LogType::FatalError, "unknown error");
+		gmb::logging::Log(gmb::logging::LogSource::Program, gmb::logging::LogType::FatalError, gmb::msg::unknownError);
 	}
 
 	return 0;

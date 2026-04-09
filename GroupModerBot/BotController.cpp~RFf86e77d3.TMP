@@ -212,7 +212,7 @@ Managing Bot Administrators
 		std::string sendMessageText{};
 
 		size_t number{ 1 };
-
+		test = message->chat->title;
 		for (const auto& [id, groupFromCache] : botDatabase.GetGroups())
 		{
 			sendMessageText += std::to_string(number);
@@ -249,7 +249,7 @@ Managing Bot Administrators
 			sendMessageText = "There are no groups";
 		}
 
-		return { "list of groups has been viewed", sendMessageText };
+		return { "list of groups has been viewed", sendMessageText};
 	}
 
 	logging::OnEventResult BotController::OnSetGroupUniqueTitle(TgBot::Message::Ptr message)

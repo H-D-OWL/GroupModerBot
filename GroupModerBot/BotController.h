@@ -8,109 +8,109 @@
 
 #include "BotDatabase.h"
 #include "logging.h"
+#include "Constants.h"
 
-using namespace std;
-using namespace TgBot;
-using namespace logging;
-
-class BotController
+namespace gmb
 {
-public:
-
-	explicit BotController(Bot& bot, BotDatabase& botDatabase);
-	void Run();
-
-private:
-
-	OnEventResult OnStart(Message::Ptr message);
-
-	OnEventResult OnBotActive(Message::Ptr message);
-	OnEventResult OnBotDeactive(Message::Ptr message);
-
-	OnEventResult OnGroups(Message::Ptr message);
-	OnEventResult OnSetGroupUniqueTitle(Message::Ptr message);
-
-	OnEventResult OnAdmins(Message::Ptr message);
-	OnEventResult OnAddAdmin(Message::Ptr message);
-	OnEventResult OnRemoveAdmin(Message::Ptr message);
-
-	OnEventResult OnSetWarnMuteSettings(Message::Ptr message);
-	OnEventResult OnSetWarnBanSettings(Message::Ptr message);
-
-	OnEventResult OnSetWarn(Message::Ptr message);
-	OnEventResult OnViewWarn(Message::Ptr message);
-
-	OnEventResult OnNonCommand(Message::Ptr message);
-	OnEventResult onMyChatMember(ChatMemberUpdated::Ptr update);
-	
-	//Provides protection against any exceptions. Logs any exceptions that occur or the correct execution of code.
-	template<typename Func>
-	void SafeExecute(const ContextLog& contextLog, const Func func) noexcept
+	class BotController
 	{
-		auto SafelySendMessage = [this](const string& userId, const string& textMessage) noexcept
+	public:
+
+		explicit BotController(TgBot::Bot& bot, BotDatabase& botDatabase);
+		void Run();
+
+	private:
+
+		logging::OnEventResult OnStart(TgBot::Message::Ptr message);
+
+		logging::OnEventResult OnBotActive(TgBot::Message::Ptr message);
+		logging::OnEventResult OnBotDeactive(TgBot::Message::Ptr message);
+
+		logging::OnEventResult OnGroups(TgBot::Message::Ptr message);
+		logging::OnEventResult OnSetGroupUniqueTitle(TgBot::Message::Ptr message);
+
+		logging::OnEventResult OnAdmins(TgBot::Message::Ptr message);
+		logging::OnEventResult OnAddAdmin(TgBot::Message::Ptr message);
+		logging::OnEventResult OnRemoveAdmin(TgBot::Message::Ptr message);
+
+		logging::OnEventResult OnSetWarnMuteSettings(TgBot::Message::Ptr message);
+		logging::OnEventResult OnSetWarnBanSettings(TgBot::Message::Ptr message);
+
+		logging::OnEventResult OnSetWarn(TgBot::Message::Ptr message);
+		logging::OnEventResult OnViewWarn(TgBot::Message::Ptr message);
+
+		//logging::OnEventResult OnNonCommand(TgBot::Message::Ptr message);
+		logging::OnEventResult OnMyChatMember(TgBot::ChatMemberUpdated::Ptr update);
+
+		//Provides protection against any exceptions. Logs any exceptions that occur or the correct execution of code.
+		template<typename Func>
+		void SafeExecute(const logging::ContextLog& contextLog, const Func func) noexcept
+		{
+			auto SafelySendMessage = [this](const std::string& id, const std::string& textMessage) noexcept
+				{
+					try
+					{
+						bot.getApi().sendMessage(id, textMessage);
+					}
+					catch (...)
+					{
+						//
+					}
+				};
+
+			try
 			{
-				try
-				{
-					bot.getApi().sendMessage(userId, textMessage);
-				}
-				catch (...)
-				{
-					//
-				}
-			};
+				const logging::OnEventResult onEventResult = func();
 
-		try
-		{
-			const OnEventResult onEventResult = func();
+				if (!onEventResult.logMsg.empty())
+					logging::Log(logging::LogSource::Program, logging::LogType::Event, contextLog, onEventResult.logMsg);
 
-			if (!onEventResult.logText.empty())
-				Log(LogSource::Program, LogType::Event, contextLog, onEventResult.logText);
+				if (!onEventResult.chatMsg.empty())
+					SafelySendMessage(contextLog.userId, (contextLog.title.empty() ? "" : contextLog.title + ": ") + onEventResult.chatMsg);
 
-			if (!onEventResult.messageText.empty())
-				SafelySendMessage(contextLog.userId, onEventResult.messageText.data());
+				if (!onEventResult.groupMsg.empty())
+					SafelySendMessage(std::string(contextLog.chatId), std::string(onEventResult.groupMsg));
+			}
+			catch (const SQLite::Exception& e)
+			{
+				logging::Log(logging::LogSource::Database, logging::LogType::Error, contextLog, e.what());
+
+				SafelySendMessage(contextLog.userId, "Database error: " + std::string{ e.what() });
+			}
+			catch (const TgBot::TgException& e)
+			{
+				logging::Log(logging::LogSource::Bot, logging::LogType::Error, contextLog, e.what());
+
+				SafelySendMessage(contextLog.userId, "Telegram error: " + std::string{ e.what() });
+			}
+			catch (const std::exception& e)
+			{
+				logging::Log(logging::LogSource::Program, logging::LogType::Error, contextLog, e.what());
+
+				SafelySendMessage(contextLog.userId, "Program error: " + std::string{ e.what() });
+			}
+			catch (...)
+			{
+				logging::Log(logging::LogSource::Program, logging::LogType::Error, contextLog, gmb::msg::unknownError);
+
+				SafelySendMessage(contextLog.userId, gmb::msg::unknownError);
+			}
 		}
-		catch (const SQLite::Exception& e)
-		{
-			Log(LogSource::Database, LogType::Error, contextLog, e.what());
 
-			SafelySendMessage(contextLog.userId, "Database error: " + string{ e.what() });
-		}
-		catch (const TgException& e)
-		{
-			Log(LogSource::Bot, LogType::Error, contextLog, e.what());
-			
-			SafelySendMessage(contextLog.userId, "Telegram error: " + string{ e.what() });
-		}
-		catch (const exception& e)
-		{
-			Log(LogSource::Program, LogType::Error, contextLog, e.what());
-			
-			SafelySendMessage(contextLog.userId, "Program error: " + string{ e.what() });
-		}
-		catch (...)
-		{
-			Log(LogSource::Program, LogType::Error, contextLog, "unknown error");
-			
-			SafelySendMessage(contextLog.userId, "Unknown error");
-		}
-	}
+		//Checks if the message is a system message.
+		bool isSystemMessage(const TgBot::Message::Ptr& message);
 
-	//Checks if the message is a system message.
-	bool isSystemMessage(const Message::Ptr& message);
+		int64_t Fibonacci(const size_t numberOfNumber) const;
 
-	[[nodiscard]] string CleaningUpLateralSpaces(const string_view text);
+		//Generates a std::string of random characters from 0 to 9 of the specified length.
+		std::string RandomNumberGenerator(const size_t length);
+		std::random_device rd;
+		std::default_random_engine dre{ rd() };
+		std::uniform_int_distribution<int> uniform_dist{ '0', '9' };
 
-	 int64_t Fibonacci(const size_t numberOfNumber) const;
+		std::string confirmationCode{ gmb::consts::invalidTextData }, codeForAddingGroup{ gmb::consts::invalidTextData };
 
-	//Generates a string of random characters from 0 to 9 of the specified length.
-	string RandomNumberGenerator(const size_t length);
-	random_device rd;
-	default_random_engine dre{ rd() };
-	uniform_int_distribution<int> uniform_dist{ '0', '9' };
-
-	string confirmationCode{ "ERROR" }, codeForAddingGroup{ "ERROR" };
-
-	Bot& bot; 
-	BotDatabase& botDatabase;
-};
-
+		TgBot::Bot& bot;
+		BotDatabase& botDatabase;
+	};
+}
