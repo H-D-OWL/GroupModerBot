@@ -2,13 +2,20 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <consoleapi2.h>
+#include <WinNls.h>
 #endif
 
 #include <fstream>
+#include <ios>
 #include <string>
+#include <stdexcept>
+#include <exception>
 
-#include <tgbot/tgbot.h>
-#include <SQLiteCpp/SQLiteCpp.h>
+#include <tgbot/Bot.h>
+#include <tgbot/TgException.h>
+
+#include <SQLiteCpp/Exception.h>
 
 #include "BotController.h"
 #include "BotDatabase.h"
@@ -20,10 +27,10 @@ int main()
 {
 	try
 	{
-		#ifdef _WIN32
-			SetConsoleOutputCP(CP_UTF8);
-			SetConsoleCP(CP_UTF8);
-		#endif
+#ifdef _WIN32
+		SetConsoleOutputCP(CP_UTF8);
+		SetConsoleCP(CP_UTF8);
+#endif
 
 		std::ifstream fileDataForBot(std::string(gmb::consts::configFileName), std::ios_base::in);
 
@@ -92,19 +99,6 @@ int main()
 			}());
 
 		///
-
-		//TODO Debug check.
-		TgBot::Bot bot2("8231301649:AAEtgMiY1ukuwycs5RWus5IDVfQbrHv7BKo");
-
-		try
-		{
-			bot2.getApi().sendMessage(-1003528493878, "test text");
-		}
-		catch (const TgBot::TgException& e)
-		{
-			gmb::logging::Log(gmb::logging::LogSource::Bot, gmb::logging::LogType::FatalError, e.what());
-		}
-		//-1003528493878
 
 		TgBot::Bot bot(botToken);
 

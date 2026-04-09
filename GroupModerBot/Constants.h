@@ -21,10 +21,10 @@ namespace gmb
 		{
 			inline const std::string privateChat = "call in private chat";
 			inline const std::string nonPrivateChat = "call in non-private chat";
-			inline const std::string fromOwner = "call fromm owner";
-			inline const std::string fromAdmin = "call fromm admin";
+			inline const std::string fromOwner = "call from owner";
+			inline const std::string fromAdmin = "call from admin";
 			inline const std::string fromPossibleOwner = "call from possible owner";
-			inline const std::string fromGuest = "call fromm guest";
+			inline const std::string fromGuest = "call from guest";
 			inline const std::string notFromOwner = "call not from owner";
 			inline const std::string invalidCommandParameters = "invalid command parameters";
 			inline const std::string notReplyToMessage = "message is not reply to message";
@@ -36,7 +36,7 @@ namespace gmb
 		{
 			inline const std::string cannotUseCommand = "you cannot use this command";
 			inline const std::string invalidCommandParameters = "you entered the command parameters incorrectly";
-			inline const std::string notReplyToMessage = "ssage is not a reply to the message";
+			inline const std::string notReplyToMessage = "message is not a reply to the message";
 			inline const std::string userNotInGroup = "the user, the command is directed to is not in the group";
 			inline const std::string botIsNotActive = "the bot is inactive";
 		}

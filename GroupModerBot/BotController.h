@@ -1,14 +1,20 @@
 ﻿#pragma once
 
+#include <cstdint>
+#include <exception>
 #include <random>
 #include <string>
-#include <string_view>
 
-#include <tgbot/tgbot.h>
+#include <tgbot/Bot.h>
+#include <tgbot/TgException.h>
+#include <tgbot/types/ChatMemberUpdated.h>
+#include <tgbot/types/Message.h>
+
+#include <SQLiteCpp/Exception.h>
 
 #include "BotDatabase.h"
-#include "logging.h"
 #include "Constants.h"
+#include "logging.h"
 
 namespace gmb
 {
@@ -98,7 +104,7 @@ namespace gmb
 		}
 
 		//Checks if the message is a system message.
-		bool isSystemMessage(const TgBot::Message::Ptr& message);
+		//bool isSystemMessage(const TgBot::Message::Ptr& message);
 
 		int64_t Fibonacci(const size_t numberOfNumber) const;
 

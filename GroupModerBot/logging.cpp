@@ -1,7 +1,11 @@
 ﻿#include "logging.h"
 
-//using namespace gmb;
-//using namespace logging;
+#include <iostream>
+#include <string> 
+#include <string_view>
+
+#include <tgbot/types/ChatMemberUpdated.h> 
+#include <tgbot/types/Message.h> 
 
 namespace gmb
 {
@@ -45,25 +49,25 @@ namespace gmb
 			std::clog << LogPrefixToText(logSource) << ' ' << LogPrefixToText(logType) << ' '
 				<< "[User: " << IsDefined(contextLog.userId) << " (" << IsDefined(contextLog.username) << ") | "
 				<< "Chat: " << IsDefined(contextLog.chatId) << " (" << IsDefined(contextLog.title) << ") | "
-				<< "Command: " << contextLog.сommand << "] "
+				<< "Command: " << contextLog.command << "] "
 				<< logText << '\n';
 		}
 
-		ContextLog ContextLog::ToContextLog(const TgBot::Message::Ptr& message, const std::string& сommand)
+		ContextLog ContextLog::ToContextLog(const TgBot::Message::Ptr& message, const std::string& command)
 		{
 			const bool isValidUser = message->from != nullptr;
 			const bool isValidChat = message->chat != nullptr;
 
 			return ContextLog{
-				.userId = isValidUser ? std::to_string(message->from->id) : "!",
+				.userId = isValidUser ? std::to_string(message->from->id) : "",
 				.username = isValidUser ? message->from->username : "",
 				.chatId = isValidChat ? std::to_string(message->chat->id) : "",
 				.title = isValidChat ? message->chat->title : "",
-				.сommand = сommand
+				.command = command
 			};
 		}
 
-		ContextLog ContextLog::ToContextLog(const TgBot::ChatMemberUpdated::Ptr& update, const std::string& сommand)
+		ContextLog ContextLog::ToContextLog(const TgBot::ChatMemberUpdated::Ptr& update, const std::string& command)
 		{
 			const bool isValidUser = update->from != nullptr;
 			const bool isValidChat = update->chat != nullptr;
@@ -73,7 +77,7 @@ namespace gmb
 				.username = isValidUser ? update->from->username : "",
 				.chatId = isValidChat ? std::to_string(update->chat->id) : "",
 				.title = isValidChat ? update->chat->title : "",
-				.сommand = сommand
+				.command = command
 			};
 		}
 	}

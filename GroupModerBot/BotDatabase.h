@@ -1,16 +1,16 @@
 ﻿#pragma once
 
-#include <iostream>
+#include <cstdint> 
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
-#include <SQLiteCpp/SQLiteCpp.h>
-#include <tgbot/tgbot.h>
+#include <tgbot/types/Chat.h> 
 
-#include "logging.h"
+#include <SQLiteCpp/Database.h> 
+ 
 
 namespace gmb
 {

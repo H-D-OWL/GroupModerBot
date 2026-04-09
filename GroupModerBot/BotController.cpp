@@ -1,5 +1,25 @@
 ﻿#include "BotController.h"
 
+#include <algorithm> 
+#include <cctype>    
+#include <chrono> 
+#include <thread>
+#include <corecrt.h>
+#include <cstdint> 
+#include <sstream> 
+#include <string> 
+
+#include <tgbot/Bot.h>
+#include <tgbot/net/TgLongPoll.h> 
+#include <tgbot/types/Chat.h> 
+#include <tgbot/types/ChatMemberUpdated.h>
+#include <tgbot/types/ChatPermissions.h> 
+#include <tgbot/types/Message.h>
+
+#include "BotDatabase.h"
+#include "Constants.h"
+#include "logging.h"
+
 namespace gmb
 {
 	BotController::BotController(TgBot::Bot& bot, BotDatabase& botDatabase) : bot(bot), botDatabase(botDatabase)
@@ -41,9 +61,13 @@ namespace gmb
 		TgBot::TgLongPoll longPoll(bot);
 
 		while (true)
+		{
 			SafeExecute(logging::ContextLog{}, [&]() -> logging::OnEventResult {
-			while (true) { longPoll.start(); }
-			return { "", "" }; });
+				while (true) { longPoll.start(); }
+				return { "", "" }; });
+
+			std::this_thread::sleep_for(std::chrono::seconds(5));
+		}
 	}
 
 	logging::OnEventResult BotController::OnStart(TgBot::Message::Ptr message)
@@ -268,7 +292,7 @@ Managing Bot Administrators
 
 		if (newUniqueTitle.length() > 32) return { gmb::msg::log::invalidCommandParameters, gmb::msg::chat::invalidCommandParameters };
 
-		if (!all_of(newUniqueTitle.begin(), newUniqueTitle.end(), [](unsigned char c) { return isalnum(c) || c == '_'; })) return { gmb::msg::log::invalidCommandParameters, gmb::msg::chat::invalidCommandParameters };
+		if (!std::all_of(newUniqueTitle.begin(), newUniqueTitle.end(), [](unsigned char c) { return isalnum(c) || c == '_'; })) return { gmb::msg::log::invalidCommandParameters, gmb::msg::chat::invalidCommandParameters };
 
 		if (!botDatabase.GetGroups().contains(botDatabase.GroupIdFromUniqueTitle(oldUniqueTitle))) return { gmb::msg::GroupWithUniqueTitleNotFound(oldUniqueTitle), gmb::msg::GroupWithUniqueTitleNotFound(oldUniqueTitle) };
 
@@ -328,12 +352,6 @@ Managing Bot Administrators
 
 		if (message->chat->type != TgBot::Chat::Type::Private) return { gmb::msg::log::nonPrivateChat, "" };
 
-		std::stringstream commandParameters(message->text.substr("/addAdmin"sv.size()));
-
-		std::string adminConfirmationCode{};
-
-		if (!(commandParameters >> adminConfirmationCode)) return { gmb::msg::log::invalidCommandParameters, gmb::msg::chat::invalidCommandParameters };
-
 		if (botDatabase.IsOwner(message->from->id))
 		{
 			confirmationCode.clear();
@@ -348,6 +366,12 @@ Managing Bot Administrators
 		}
 		else
 		{
+			std::stringstream commandParameters(message->text.substr("/addAdmin"sv.size()));
+
+			std::string adminConfirmationCode{};
+
+			if (!(commandParameters >> adminConfirmationCode)) return { gmb::msg::log::invalidCommandParameters, gmb::msg::chat::invalidCommandParameters };
+
 			if (confirmationCode != "ERROR" && adminConfirmationCode == confirmationCode && botDatabase.GetNumberAdmins() == 0)
 			{
 				botDatabase.AddAdmin(BotDatabase::Admin{
@@ -590,14 +614,15 @@ Managing Bot Administrators
 				{
 					botDatabase.SetWarns(replyToMessage->from->id, groupSettings.id, previousQuantityWarn);
 
-					return { "user could not be muted", "еhe user could not be muted" };
+					return { "user could not be muted", "the user could not be muted" };
 				}
 
 				return { "user muted", "the user is muted" };
 			}
 			else if (newQuantityWarns < previousQuantityWarn)
 			{
-				if (memberStatus != "kicked") return { "63", "63" };
+				if (memberStatus != "kicked") return { std::to_string(replyToMessage->from->id) + " (" + replyToMessage->from->username + ')' + " now has " + std::to_string(newQuantityWarns) + " warn",
+					std::to_string(replyToMessage->from->id) + " (" + replyToMessage->from->username + ')' + " now has " + std::to_string(newQuantityWarns) + " warn" };
 
 				if (!bot.getApi().unbanChatMember(replyToMessage->chat->id, replyToMessage->from->id, true))
 				{
@@ -760,7 +785,7 @@ Managing Bot Administrators
 		return { gmb::msg::unknownBehavior, gmb::msg::unknownBehavior };
 	}
 
-	bool BotController::isSystemMessage(const TgBot::Message::Ptr& message)
+	/*bool BotController::isSystemMessage(const TgBot::Message::Ptr& message)
 	{
 		return (
 			!message->newChatMembers.empty()
@@ -775,7 +800,7 @@ Managing Bot Administrators
 			|| message->migrateFromChatId != 0
 			|| message->pinnedMessage != nullptr
 			);
-	}
+	}*/
 
 	int64_t BotController::Fibonacci(const size_t numberOfNumber) const
 	{

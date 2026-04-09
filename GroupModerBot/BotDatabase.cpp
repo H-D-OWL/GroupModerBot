@@ -1,5 +1,20 @@
 ﻿#include "BotDatabase.h"
 
+#include <algorithm> 
+#include <cassert>
+#include <cstdint> 
+#include <memory>
+#include <stdexcept> 
+#include <string>
+#include <string_view>
+#include <unordered_map>
+
+#include <tgbot/types/Chat.h> 
+
+#include <SQLiteCpp/Database.h> 
+#include <SQLiteCpp/Exception.h> 
+#include <SQLiteCpp/Statement.h> 
+
 namespace gmb
 {
 
@@ -494,11 +509,11 @@ namespace gmb
 		{
 			if (it->second.uniqueTitle != group.uniqueTitle)
 			{
-				const bool eraceUniqueTitle = Cache.groupIdsByUniqueTitle.erase(it->second.uniqueTitle);
+				const bool eraseUniqueTitle = Cache.groupIdsByUniqueTitle.erase(it->second.uniqueTitle);
 
 				Cache.groupIdsByUniqueTitle[group.uniqueTitle] = group.id;
 
-				assert(eraceUniqueTitle && "Cache desync");
+				assert(eraseUniqueTitle && "Cache desync");
 			}
 		}
 		else

@@ -1,10 +1,14 @@
 ﻿#pragma once
 
-#include <iostream>
+#include <string> 
 #include <string_view>
-#include <vector>
 
-#include <tgbot/tgbot.h>
+#include <tgbot/types/ChatMemberUpdated.h> 
+#include <tgbot/types/Message.h> 
+
+//#include <tgbot/tgbot.h>
+//#include <tgbot/types/Message.h>
+//#include <tgbot/types/ChatMemberUpdated.h>
 
 namespace gmb
 {
@@ -31,10 +35,10 @@ namespace gmb
 
 		struct ContextLog
 		{
-			const std::string userId{}, username{}, chatId{}, title{}, сommand{};
-
-			static logging::ContextLog ToContextLog(const TgBot::Message::Ptr& message, const std::string& сommand);
-			static logging::ContextLog ToContextLog(const TgBot::ChatMemberUpdated::Ptr& update, const std::string& сommand);
+			const std::string userId{}, username{}, chatId{}, title{}, command{};
+			
+			static logging::ContextLog ToContextLog(const TgBot::Message::Ptr& message, const std::string& command);
+			static logging::ContextLog ToContextLog(const TgBot::ChatMemberUpdated::Ptr& update, const std::string& command);
 
 		};
 
