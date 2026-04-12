@@ -41,7 +41,7 @@ int main()
 				text += "\" not found";
 				return text;
 				}() };
-
+		
 		gmb::logging::Log(gmb::logging::LogSource::Program, gmb::logging::LogType::Event, []() {
 			std::string text = "file \"";
 			text += gmb::consts::configFileName;
