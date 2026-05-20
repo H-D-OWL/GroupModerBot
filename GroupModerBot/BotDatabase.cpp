@@ -15,8 +15,35 @@
 #include <SQLiteCpp/Exception.h> 
 #include <SQLiteCpp/Statement.h> 
 
+#include "Constants.h"
+
 namespace gmb
 {
+	std::string BotDatabase::InitStandardDB()
+	{
+		SQLite::Database db(consts::standardDBFile, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
+
+		const std::unordered_map<std::string_view, const std::string> queries{
+			{"BotAdmins", R"(CREATE TABLE "BotAdmins" ("Id"	INTEGER NOT NULL UNIQUE,"FirstName"	TEXT NOT NULL,"LastName"	TEXT NOT NULL,"Username"	TEXT NOT NULL,"IsBot"	INTEGER NOT NULL,"IsPremium"	INTEGER NOT NULL,"IsBotOwner"	INTEGER NOT NULL,PRIMARY KEY("Id")))"},
+			{"Groups", R"(CREATE TABLE "Groups" ("Id"	INTEGER NOT NULL UNIQUE,"Title"	TEXT NOT NULL,"UniqueTitle"	TEXT NOT NULL UNIQUE,"Type"	INTEGER NOT NULL CHECK("Type" >= 0 AND "Type" <= 3),"IsBotAdmin"	INTEGER NOT NULL CHECK("IsBotAdmin" = 0 OR "IsBotAdmin" = 1),"IsBotActive"	INTEGER NOT NULL CHECK("IsBotActive" = 0 OR "IsBotActive" = 1),PRIMARY KEY("Id")))"},
+			{"GroupsSettings", R"(CREATE TABLE "GroupsSettings" ("Id"	INTEGER NOT NULL UNIQUE,"NumWarnToMute"	INTEGER NOT NULL CHECK("NumWarnToMute" >= 0),"NumWarnToBan"	INTEGER NOT NULL CHECK("NumWarnToBan" >= 0),FOREIGN KEY("Id") REFERENCES "Groups"("Id") ON DELETE CASCADE))"},
+			{"UsersWarnings", R"(CREATE TABLE "UsersWarnings" ("Id"	INTEGER NOT NULL,"GroupId"	INTEGER NOT NULL,"QuantityWarn"	INTEGER NOT NULL CHECK("QuantityWarn" >= 0),PRIMARY KEY("Id","GroupId"),FOREIGN KEY("GroupId") REFERENCES "Groups"("Id") ON DELETE CASCADE))"}
+		};
+
+		for (const auto& table : tables)
+		{
+			assert(tables.size() == queries.size() && queries.contains(table->nameTable) && "Table standardDB desync");
+
+			if (!db.tableExists(std::string(table->nameTable)))
+			{
+				SQLite::Statement query{ db, queries.at(table->nameTable)};
+
+				query.exec();
+			}
+		}
+
+		return consts::standardDBFile;
+	}
 
 	void BotDatabase::Open(const std::string& pathToDatabase)
 	{
@@ -37,7 +64,7 @@ namespace gmb
 	{
 		for (const auto& table : tables)
 		{
-			const std::string& nameTable = std::string(table->nameTable);
+			const std::string nameTable = std::string(table->nameTable);
 
 			if (botDatabase->tableExists(nameTable))
 			{
@@ -509,7 +536,7 @@ namespace gmb
 		{
 			if (it->second.uniqueTitle != group.uniqueTitle)
 			{
-				const bool eraseUniqueTitle = Cache.groupIdsByUniqueTitle.erase(it->second.uniqueTitle);
+				[[maybe_unused]] const bool eraseUniqueTitle = Cache.groupIdsByUniqueTitle.erase(it->second.uniqueTitle);
 
 				Cache.groupIdsByUniqueTitle[group.uniqueTitle] = group.id;
 
@@ -531,16 +558,16 @@ namespace gmb
 
 	void BotDatabase::DeleteAdminFromCache(const int64_t id)
 	{
-		const bool eraseAdmin = Cache.admins.erase(id);
+		[[maybe_unused]] const bool eraseAdmin = Cache.admins.erase(id);
 
 		assert(eraseAdmin && "Cache desync");
 	}
 
 	void BotDatabase::DeleteGroupFromCache(const int64_t id)
 	{
-		const bool eraseGroupIdsByUniqueTitle = Cache.groupIdsByUniqueTitle.erase(Cache.groups.at(id).uniqueTitle);
-		const bool eraseGroup = Cache.groups.erase(id);
-		const bool eraseGroupSettings = Cache.groupsSettings.erase(id);
+		[[maybe_unused]] const bool eraseGroupIdsByUniqueTitle = Cache.groupIdsByUniqueTitle.erase(Cache.groups.at(id).uniqueTitle);
+		[[maybe_unused]] const bool eraseGroup = Cache.groups.erase(id);
+		[[maybe_unused]] const bool eraseGroupSettings = Cache.groupsSettings.erase(id);
 
 		assert(eraseGroupIdsByUniqueTitle && eraseGroup && eraseGroupSettings && "Cache desync");
 	}

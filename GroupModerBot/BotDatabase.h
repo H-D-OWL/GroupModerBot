@@ -19,16 +19,13 @@ namespace gmb
 	{
 	public:
 
-		struct DataTable
-		{
-			auto operator<=>(const DataTable&) const = default;
-		};
-
-		struct Admin : DataTable
+		struct Admin
 		{
 			int64_t id{};
 			std::string firstName{}, lastName{}, username{};
 			bool isBot{}, isPremium{}, isBotOwner{};
+
+			auto operator<=>(const Admin&) const = default;
 
 			Admin() = default;
 
@@ -37,7 +34,7 @@ namespace gmb
 			}
 		};
 
-		struct Group : DataTable
+		struct Group 
 		{
 			int64_t id{};
 			std::string title{}, uniqueTitle{};
@@ -53,7 +50,7 @@ namespace gmb
 			}
 		};
 
-		struct GroupSettings : DataTable
+		struct GroupSettings 
 		{
 			int64_t id{}, numWarnToMute{}, numWarnToBan{};
 
@@ -65,6 +62,8 @@ namespace gmb
 				: id(id), numWarnToMute(numWarnToMute), numWarnToBan(numWarnToBan) {
 			}
 		};
+
+		static std::string InitStandardDB();
 
 		void Open(const std::string& pathToDatabase);
 		void CheckStructure() const;
@@ -117,7 +116,6 @@ namespace gmb
 		struct Cache
 		{
 			inline static std::unordered_map<int64_t, Admin> admins{};
-			//std::unordered_map<std::string, int64_t> adminIdsByUsername{};
 
 			inline static std::unordered_map<int64_t, Group> groups{};
 			inline static std::unordered_map<std::string, int64_t> groupIdsByUniqueTitle{};
@@ -183,7 +181,7 @@ namespace gmb
 		inline static const GroupsSettingsTableName  groupsSettingsTableName{};
 		inline static const UsersWarningsTableName  usersWarningsTableName{};
 
-		const std::vector<const TableName*> tables{
+		inline static const std::vector<const TableName*> tables{
 			&botAdminsTableName,
 			&groupsTableName,
 			&groupsSettingsTableName,

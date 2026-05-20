@@ -14,7 +14,7 @@
 
 #include "BotDatabase.h"
 #include "Constants.h"
-#include "logging.h"
+#include "Logging.h"
 
 namespace gmb
 {
@@ -45,7 +45,6 @@ namespace gmb
 		logging::OnEventResult OnSetWarn(TgBot::Message::Ptr message);
 		logging::OnEventResult OnViewWarn(TgBot::Message::Ptr message);
 
-		//logging::OnEventResult OnNonCommand(TgBot::Message::Ptr message);
 		logging::OnEventResult OnMyChatMember(TgBot::ChatMemberUpdated::Ptr update);
 
 		//Provides protection against any exceptions. Logs any exceptions that occur or the correct execution of code.
@@ -102,9 +101,6 @@ namespace gmb
 				SafelySendMessage(contextLog.userId, gmb::msg::unknownError);
 			}
 		}
-
-		//Checks if the message is a system message.
-		//bool isSystemMessage(const TgBot::Message::Ptr& message);
 
 		int64_t Fibonacci(const size_t numberOfNumber) const;
 

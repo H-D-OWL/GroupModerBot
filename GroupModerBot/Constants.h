@@ -6,7 +6,8 @@ namespace gmb
 {
 	namespace consts
 	{
-		inline const std::string configFileName = "DataForBot.txt";
+		inline const std::string configFile = "DataForBot.txt";
+		inline const std::string standardDBFile = "GroupModerBotDatabase.db";
 		inline const std::string dbPathKey = "DbPath=";
 		inline const std::string botTokenKey = "BotToken=";
 		inline const std::string invalidTextData = "ERROR";

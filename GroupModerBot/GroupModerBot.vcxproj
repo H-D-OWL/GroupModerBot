@@ -180,14 +180,14 @@
   <ItemGroup>
     <ClCompile Include="BotController.cpp" />
     <ClCompile Include="BotDatabase.cpp" />
-    <ClCompile Include="logging.cpp" />
+    <ClCompile Include="Logging.cpp" />
     <ClCompile Include="GroupModerBot.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BotController.h" />
     <ClInclude Include="BotDatabase.h" />
     <ClInclude Include="Constants.h" />
-    <ClInclude Include="logging.h" />
+    <ClInclude Include="Logging.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -6,6 +6,7 @@
 #include <WinNls.h>
 #endif
 
+#include <filesystem>
 #include <fstream>
 #include <ios>
 #include <string>
@@ -19,7 +20,7 @@
 
 #include "BotController.h"
 #include "BotDatabase.h"
-#include "logging.h"
+#include "Logging.h"
 #include "Constants.h"
 
 
@@ -32,29 +33,32 @@ int main()
 		SetConsoleCP(CP_UTF8);
 #endif
 
-		std::ifstream fileDataForBot(std::string(gmb::consts::configFileName), std::ios_base::in);
+		std::ifstream fileDataForBot(std::string(gmb::consts::configFile), std::ios_base::in);
 
 		if (!fileDataForBot.is_open())
 			throw std::runtime_error{ []() {
 				std::string text = "file \"";
-				text += gmb::consts::configFileName;
+				text += gmb::consts::configFile;
 				text += "\" not found";
 				return text;
 				}() };
 		
 		gmb::logging::Log(gmb::logging::LogSource::Program, gmb::logging::LogType::Event, []() {
 			std::string text = "file \"";
-			text += gmb::consts::configFileName;
+			text += gmb::consts::configFile;
 			text += "\" found";
 			return text;
 			}());
 
-		std::string dbPath{ gmb::consts::invalidTextData }, botToken{ gmb::consts::invalidTextData };
+		std::filesystem::path dbPath{ gmb::consts::invalidTextData };
+		std::string botToken{ gmb::consts::invalidTextData };
 
 		while (fileDataForBot.good())
 		{
 			std::string fileLine{};
 			getline(fileDataForBot, fileLine);
+
+			fileLine.erase(std::remove(fileLine.begin(), fileLine.end(), '\r'), fileLine.end());
 
 			if (const size_t offDbPath = fileLine.find(gmb::consts::dbPathKey); offDbPath != std::string::npos)
 			{
@@ -70,11 +74,17 @@ int main()
 
 		///
 
+		const std::string dbTitle = [&dbPath]()
+			{
+				if (dbPath == gmb::consts::invalidTextData)
+					dbPath = std::filesystem::absolute(gmb::BotDatabase::InitStandardDB()).string();
+
+				return dbPath.filename().string();
+			}();
+
 		gmb::BotDatabase botDatabase;
 
-		const std::string& dbTitle = dbPath.substr(dbPath.rfind('\\') + 1);
-
-		botDatabase.Open(dbPath);
+		botDatabase.Open(dbPath.string());
 		gmb::logging::Log(gmb::logging::LogSource::Database, gmb::logging::LogType::Event, [&dbTitle]() {
 			std::string text = "database: \"";
 			text += dbTitle;
@@ -132,6 +142,8 @@ int main()
 	{
 		gmb::logging::Log(gmb::logging::LogSource::Program, gmb::logging::LogType::FatalError, gmb::msg::unknownError);
 	}
+
+	gmb::logging::StopConsole();
 
 	return 0;
 }

@@ -6,10 +6,6 @@
 #include <tgbot/types/ChatMemberUpdated.h> 
 #include <tgbot/types/Message.h> 
 
-//#include <tgbot/tgbot.h>
-//#include <tgbot/types/Message.h>
-//#include <tgbot/types/ChatMemberUpdated.h>
-
 namespace gmb
 {
 	namespace logging
@@ -27,7 +23,7 @@ namespace gmb
 			Error,
 			FatalError,
 		};
-
+		 
 		struct OnEventResult
 		{	
 			const std::string logMsg, chatMsg{}, groupMsg{};
@@ -45,5 +41,6 @@ namespace gmb
 		void Log(const logging::LogSource logSource, const logging::LogType logType, const std::string_view log);
 		void Log(const logging::LogSource logSource, const logging::LogType logType, const logging::ContextLog& contextLog, const std::string_view logText);
 
+		void StopConsole();
 	}
 }

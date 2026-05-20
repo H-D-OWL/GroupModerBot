@@ -18,7 +18,7 @@
 
 #include "BotDatabase.h"
 #include "Constants.h"
-#include "logging.h"
+#include "Logging.h"
 
 namespace gmb
 {
@@ -95,20 +95,21 @@ Managing Bot Administrators
 /removeAdmin - remove a bot administrator
 
 Warning Settings
-/setWarnMuteSettings - set the number of warnings before blocking a group member
-/setWarnBanSettings - set the number of warnings before blocking a group member
+/setWarnMuteSettings - set the number of warnings before a group member is mute
+/setWarnBanSettings - set the number of warnings before banning a group member
 
 In a group:
 
 Bot Management
-/botActive - Activates the bot in the group
-/botDeactive - Deactivates the bot in the group
+/botActive - activates the bot in the group
+/botDeactive - deactivates the bot in the group
 
 Managing Warnings
-/addWarn - Adds the specified number of warnings to a member
-/removeWarn - Removes the specified number of warnings to a member member
-/setWarn - Sets the specified number of warnings for a member
-/viewWarn - Gets the number of warnings for a member
+
+/addWarn - add the specified number of warnings to a member
+/removeWarn - remove the specified number of warnings to a member member
+/setWarn - set the specified number of warnings for a member
+/viewWarn - get the number of warnings for a member
 )" };
 		}
 		else if (botDatabase.IsAdmin(message->from->id))
@@ -129,16 +130,16 @@ Managing Bot Administrators
 /admins - get information about all bot administrators
 
 Warning Settings
-/setWarnMuteSettings - set the number of warnings before blocking a group member
-/setWarnBanSettings - set the number of warnings before blocking a group member
+/setWarnMuteSettings - set the number of warnings before a group member is mute
+/setWarnBanSettings - set the number of warnings before banning a group member
 
 In a group:
 
 Managing Warnings
-/addWarn - Adds the specified number of warnings to a member
-/removeWarn - Removes the specified number of warnings to a member member
-/setWarn - Sets the specified number of warnings for a member
-/viewWarn - Gets the number of warnings for a member
+/addWarn - add the specified number of warnings to a member
+/removeWarn - remove the specified number of warnings to a member member
+/setWarn - set the specified number of warnings for a member
+/viewWarn - get the number of warnings for a member
 )" };
 		}
 		else if (botDatabase.GetNumberAdmins() == 0)
@@ -153,7 +154,7 @@ In a private chat:
 /start - get information about commands
 
 Managing Bot Administrators
-/addAdmin - become an administrator by entering the Verification Code
+/addAdmin - become an owner by entering the Verification Code
 )" };
 		}
 		else
@@ -386,7 +387,7 @@ Managing Bot Administrators
 
 				confirmationCode = "ERROR";
 
-				return { "user became bot owner", "you have become a bot admin" };
+				return { "user became bot owner", "you have become a bot owner" };
 			}
 			else if (confirmationCode != "ERROR" && adminConfirmationCode == confirmationCode && botDatabase.GetNumberAdmins() > 0)
 			{
@@ -703,44 +704,6 @@ Managing Bot Administrators
 		return { "viewed warns " + replyToMessage->from->username + '(' + std::to_string(replyToMessage->from->id) + ')', "", textMessage};
 	}
 
-	/*logging::OnEventResult BotController::OnNonCommand(TgBot::Message::Ptr message)
-	{
-		const auto dataBot = bot.getApi().getMe();
-		const std::string messageText = message->text;
-		const TgBot::Chat::Type chatType = message->chat->type;
-		const int64_t chatId = message->chat->id;
-
-		if (isSystemMessage(message))
-		{
-			//cout << "delete" << '\n';
-			//bot.getApi().deleteMessage(chatId, message->messageId);
-		}
-		else
-		{
-			switch (chatType)
-			{
-			case TgBot::Chat::Type::Private:
-				logging::Log(logging::LogSource::Bot, logging::LogType::Event, "Private user " + std::to_string(message->from->id) + " wrote " + messageText);
-				break;
-			case TgBot::Chat::Type::Group:
-				logging::Log(logging::LogSource::Bot, logging::LogType::Event, "In group " + std::to_string(chatId) + ", user " + std::to_string(message->from->id) + " wrote " + messageText);
-				break;
-			case TgBot::Chat::Type::Supergroup:
-				//bot.getApi().sendMessage(message->chat->id, message->text);
-				logging::Log(logging::LogSource::Bot, logging::LogType::Event, "In supergroup " + std::to_string(chatId) + ", user " + std::to_string(message->from->id) + " wrote " + messageText);
-				break;
-			case TgBot::Chat::Type::Channel:
-				logging::Log(logging::LogSource::Bot, logging::LogType::Event, "In channel " + std::to_string(chatId) + ", user " + std::to_string(message->from->id) + " wrote " + messageText);
-				break;
-			default:
-				throw "Unknown chat type";
-				break;
-			}
-		}
-
-		return { "test", "test" };
-	}*/
-
 	logging::OnEventResult BotController::OnMyChatMember(TgBot::ChatMemberUpdated::Ptr update)
 	{
 		const bool isContains = botDatabase.GetGroups().contains(update->chat->id);
@@ -784,23 +747,6 @@ Managing Bot Administrators
 
 		return { gmb::msg::unknownBehavior, gmb::msg::unknownBehavior };
 	}
-
-	/*bool BotController::isSystemMessage(const TgBot::Message::Ptr& message)
-	{
-		return (
-			!message->newChatMembers.empty()
-			|| message->leftChatMember != nullptr
-			|| !message->newChatTitle.empty()
-			|| !message->newChatPhoto.empty()
-			|| message->deleteChatPhoto
-			|| message->groupChatCreated
-			|| message->supergroupChatCreated
-			|| message->channelChatCreated
-			|| message->migrateToChatId != 0
-			|| message->migrateFromChatId != 0
-			|| message->pinnedMessage != nullptr
-			);
-	}*/
 
 	int64_t BotController::Fibonacci(const size_t numberOfNumber) const
 	{

@@ -1,4 +1,4 @@
-﻿#include "logging.h"
+﻿#include "Logging.h"
 
 #include <iostream>
 #include <string> 
@@ -27,12 +27,12 @@ namespace gmb
 			switch (lt)
 			{
 			case LogType::Event:		return "[EVENT]";
-			case LogType::Error:		return "[\033[31mERROR\033[0m]";
-			case LogType::FatalError:   return "[\033[31mFATAL ERROR\033[0m]";
+			case LogType::Error:		return "[ERROR]";
+			case LogType::FatalError:   return "[FATAL ERROR]";
 			default:					return "";
 			}
 		}
-
+		  
 		static constexpr const std::string_view IsDefined(const std::string_view text)
 		{
 			return text.empty() ? "undefined" : text;
@@ -51,6 +51,11 @@ namespace gmb
 				<< "Chat: " << IsDefined(contextLog.chatId) << " (" << IsDefined(contextLog.title) << ") | "
 				<< "Command: " << contextLog.command << "] "
 				<< logText << '\n';
+		}
+
+		void StopConsole()
+		{
+			std::cin.get();
 		}
 
 		ContextLog ContextLog::ToContextLog(const TgBot::Message::Ptr& message, const std::string& command)
