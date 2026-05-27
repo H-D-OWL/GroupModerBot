@@ -20,26 +20,26 @@ namespace gmb
 		enum class LogType
 		{
 			Event,
+			Command,
 			Error,
 			FatalError,
 		};
 		 
 		struct OnEventResult
 		{	
-			const std::string logMsg, chatMsg{}, groupMsg{};
+			std::string logMsg, chatMsg{}, groupMsg{};
 		};
 
 		struct ContextLog
 		{
-			const std::string userId{}, username{}, chatId{}, title{}, command{};
-			
-			static logging::ContextLog ToContextLog(const TgBot::Message::Ptr& message, const std::string& command);
-			static logging::ContextLog ToContextLog(const TgBot::ChatMemberUpdated::Ptr& update, const std::string& command);
+			std::string userId{}, username{}, userTargetId{}, userTargetname{}, chatId{}, title{}, chatType{}, action{};
 
+			static logging::ContextLog ToContextLog(const TgBot::Message::Ptr& message, const std::string& action);
+			static logging::ContextLog ToContextLog(const TgBot::ChatMemberUpdated::Ptr& update, const std::string& action);
 		};
 
-		void Log(const logging::LogSource logSource, const logging::LogType logType, const std::string_view log);
-		void Log(const logging::LogSource logSource, const logging::LogType logType, const logging::ContextLog& contextLog, const std::string_view logText);
+		void Log(const logging::LogSource ls, const logging::LogType lt, const std::string_view logText);
+		void Log(const logging::LogSource ls, const logging::LogType lt, const logging::ContextLog& contextLog, const std::string_view logText);
 
 		void StopConsole();
 	}

@@ -70,7 +70,7 @@ namespace gmb
 		void CacheLoad();
 
 		bool TableHasColumn(const std::string& tableName, const std::string_view columnName) const;
-
+		
 		const Admin* GetAdmin(const int64_t userId) const;
 		const std::unordered_map<int64_t, Admin>& GetAdmins() const;
 		bool IsAdmin(const int64_t userId) const;
@@ -80,19 +80,21 @@ namespace gmb
 		void UpdateAdmin(const Admin& admin);
 		void DeleteAdmin(const int64_t id);
 
+		const Group* GetGroup(const int64_t id) const;
+		const std::unordered_map<int64_t, Group>& GetGroups() const;
 		void AddGroup(const Group& group, const GroupSettings& groupSettings);
 		void UpdateGroup(const Group& group, const GroupSettings& groupSettings);
 		void DeleteGroup(const int64_t id);
-		const Group* GetGroup(const int64_t id) const;
-		const std::unordered_map<int64_t, Group>& GetGroups() const;
+
 		const GroupSettings* GetGroupSettings(const int64_t id) const;
 		const std::unordered_map<int64_t, GroupSettings>& GetGroupsSettings() const;
+
 		int64_t GroupIdFromUniqueTitle(const std::string& uniqueTitle) const;
 		bool IsBotActive(const int64_t groupId) const;
 
+		int64_t GetWarns(const int64_t userId, const int64_t groupId) const;
 		void SetWarns(const int64_t userId, const int64_t groupId, const int64_t warns);
 		void DeleteWarns(const int64_t userId, const int64_t groupId) const;
-		int64_t GetWarns(const int64_t userId, const int64_t groupId) const;
 
 	private:
 
@@ -126,11 +128,12 @@ namespace gmb
 		struct TableName
 		{
 			const std::string_view nameTable;
-			const std::vector<std::string_view> columnNames;
+			const std::vector<std::string_view> columnNames; //First column must be Primary Key
 
 			std::string GetColumnNamesBetweenCommas() const;
 			std::string GetPlaceholders() const;
 			std::string GetColumnsEqualPlaceholders() const;
+			std::string GetOnConflictUpdateSet() const;
 		};
 
 		struct BotAdminsTableName : TableName
@@ -190,6 +193,6 @@ namespace gmb
 
 		std::unique_ptr<SQLite::Database> botDatabase{};
 
-		inline static Cache Cache{};
+		Cache cache{};
 	};
 }

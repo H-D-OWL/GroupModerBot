@@ -8,10 +8,11 @@
 
 #include <filesystem>
 #include <fstream>
-#include <ios>
+#include <ios> 
 #include <string>
 #include <stdexcept>
 #include <exception>
+#include <algorithm>
 
 #include <tgbot/Bot.h>
 #include <tgbot/TgException.h>
@@ -49,24 +50,44 @@ int main()
 			text += "\" found";
 			return text;
 			}());
+		
+		//
+		
+		std::filesystem::path dbPath{};
 
-		std::filesystem::path dbPath{ gmb::consts::invalidTextData };
 		std::string botToken{ gmb::consts::invalidTextData };
 
-		while (fileDataForBot.good())
-		{
-			std::string fileLine{};
-			getline(fileDataForBot, fileLine);
+		bool enableProcessPendingUpdates = true;
+		
+		//
 
+		std::string fileLine{};
+
+		while (std::getline(fileDataForBot, fileLine))
+		{
 			fileLine.erase(std::remove(fileLine.begin(), fileLine.end(), '\r'), fileLine.end());
 
 			if (const size_t offDbPath = fileLine.find(gmb::consts::dbPathKey); offDbPath != std::string::npos)
 			{
 				dbPath = fileLine.substr(offDbPath + gmb::consts::dbPathKey.size());
+				continue;
 			}
-			else if (const size_t offBotToken = fileLine.find(gmb::consts::botTokenKey); offBotToken != std::string::npos)
+			 
+			if (const size_t offBotToken = fileLine.find(gmb::consts::botTokenKey); offBotToken != std::string::npos)
 			{
 				botToken = fileLine.substr(offBotToken + gmb::consts::botTokenKey.size());
+				continue;
+			}
+			 
+			if (const size_t offProcessPendingUpdatesToken = fileLine.find(gmb::consts::enableProcessPendingUpdatesKey); offProcessPendingUpdatesToken != std::string::npos)
+			{
+				const auto it = gmb::consts::valuesEnableProcessPendingUpdatesKey.find(fileLine.substr(offProcessPendingUpdatesToken + gmb::consts::enableProcessPendingUpdatesKey.size()));
+
+				if(it == gmb::consts::valuesEnableProcessPendingUpdatesKey.cend()) 
+					throw std::runtime_error{ "value EnableProcessPendingUpdatesKey is invalid" };
+
+				enableProcessPendingUpdates = it->second;
+				continue;
 			}
 		}
 
@@ -76,8 +97,20 @@ int main()
 
 		const std::string dbTitle = [&dbPath]()
 			{
-				if (dbPath == gmb::consts::invalidTextData)
+				if (dbPath.empty())
+				{
+					const bool StandardDBExists = std::filesystem::exists(gmb::consts::standardDBFile);
+
 					dbPath = std::filesystem::absolute(gmb::BotDatabase::InitStandardDB()).string();
+					
+					if(!StandardDBExists)
+						gmb::logging::Log(gmb::logging::LogSource::Database, gmb::logging::LogType::Event, []() {
+							std::string text = "database: \"";
+							text += gmb::consts::standardDBFile;
+							text += "\" was created and initialized";
+							return text;
+							}());
+				}
 
 				return dbPath.filename().string();
 			}();
@@ -117,14 +150,7 @@ int main()
 
 		gmb::BotController botController{ bot, botDatabase };
 
-		gmb::logging::Log(gmb::logging::LogSource::Bot, gmb::logging::LogType::Event, [&bot]() {
-			std::string text = "bot: \"";
-			text += bot.getApi().getMe()->username;
-			text += "\" has been launched";
-			return text;
-			}());
-
-		botController.Run();
+		botController.Run(enableProcessPendingUpdates);
 	}
 	catch (const SQLite::Exception& e)
 	{
@@ -142,6 +168,8 @@ int main()
 	{
 		gmb::logging::Log(gmb::logging::LogSource::Program, gmb::logging::LogType::FatalError, gmb::msg::unknownError);
 	}
+
+	gmb::logging::Log(gmb::logging::LogSource::Program, gmb::logging::LogType::Event, "Bot has stopped working. Press any key to close console");
 
 	gmb::logging::StopConsole();
 
