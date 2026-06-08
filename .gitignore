@@ -49,6 +49,8 @@ x64/
 x86/
 Debug/
 Release/
+out/
+CMakeUserPresets.json
 
 # debug information files
 *.dwo

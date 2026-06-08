@@ -13,7 +13,8 @@
 
 #include <SQLiteCpp/Database.h> 
 #include <SQLiteCpp/Exception.h> 
-#include <SQLiteCpp/Statement.h> 
+#include <SQLiteCpp/Statement.h>
+#include <SQLiteCpp/Transaction.h> 
 
 #include "Constants.h"
 
@@ -21,7 +22,7 @@ namespace gmb
 {
 	std::string BotDatabase::InitStandardDB()
 	{
-		SQLite::Database db(consts::standardDBFile, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
+		SQLite::Database db(gmb::consts::standardDBFile, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
 
 		const std::unordered_map<std::string_view, const std::string> queries{
 			{"BotAdmins", R"(CREATE TABLE "BotAdmins" ("Id"	INTEGER NOT NULL UNIQUE,"FirstName"	TEXT NOT NULL,"LastName"	TEXT NOT NULL,"Username"	TEXT NOT NULL,"IsBot"	INTEGER NOT NULL,"IsPremium"	INTEGER NOT NULL,"IsBotOwner"	INTEGER NOT NULL,PRIMARY KEY("Id")))"},
@@ -42,8 +43,10 @@ namespace gmb
 			}
 		}
 
-		return consts::standardDBFile;
+		return gmb::consts::standardDBFile;
 	}
+
+	///
 
 	void BotDatabase::Open(const std::string& pathToDatabase)
 	{
@@ -55,9 +58,16 @@ namespace gmb
 
 		botDatabase = make_unique<SQLite::Database>(pathToDatabase, SQLite::OPEN_READWRITE);
 
-		SQLite::Statement query{ *botDatabase, "PRAGMA foreign_keys = ON" };
+		SQLite::Statement queryFK{ *botDatabase, "PRAGMA foreign_keys = ON" };
 
-		query.exec();
+		queryFK.exec();
+
+		SQLite::Statement queryWAL{ *botDatabase, "PRAGMA journal_mode = WAL" };
+
+		queryWAL.executeStep();
+
+		SQLite::Statement querySync{ *botDatabase, "PRAGMA synchronous = NORMAL" };
+		querySync.exec();
 	}
 
 	void BotDatabase::CheckStructure() const
@@ -85,64 +95,64 @@ namespace gmb
 
 	void BotDatabase::CacheLoad()
 	{
-		{
-			SQLite::Statement adminsQuery{ *botDatabase,
-				"SELECT "
-				+ botAdminsTableName.GetColumnNamesBetweenCommas()
-				+ " FROM "
-				+ std::string(botAdminsTableName.nameTable) };
-
-			while (adminsQuery.executeStep())
-			{
-				UpsertCache(Admin{
-				adminsQuery.getColumn(0).getInt64(),
-				adminsQuery.getColumn(1).getString(),
-				adminsQuery.getColumn(2).getString(),
-				adminsQuery.getColumn(3).getString(),
-				static_cast<bool>(adminsQuery.getColumn(4).getInt64()),
-				static_cast<bool>(adminsQuery.getColumn(5).getInt64()),
-				static_cast<bool>(adminsQuery.getColumn(6).getInt64())
-					});
-			}
-		}
-
-		{
-			SQLite::Statement groupsQuery{ *botDatabase,
-				"SELECT "
-				+ groupsTableName.GetColumnNamesBetweenCommas()
-				+ " FROM "
-				+ std::string(groupsTableName.nameTable) };
-
-			while (groupsQuery.executeStep())
-			{
-				UpsertCache(Group{
-				groupsQuery.getColumn(0).getInt64(),
-				groupsQuery.getColumn(1).getString(),
-				groupsQuery.getColumn(2).getString(),
-				static_cast<TgBot::Chat::Type>(groupsQuery.getColumn(3).getInt64()),
-				static_cast<bool>(groupsQuery.getColumn(4).getInt64()),
-				static_cast<bool>(groupsQuery.getColumn(5).getInt64()),
-					});
-			}
-		}
-
-		{
-			SQLite::Statement groupsSettingsQuery{ *botDatabase,
+		SQLite::Statement getAdmins{ *botDatabase,
 			"SELECT "
-			+ groupsSettingsTableName.GetColumnNamesBetweenCommas()
+			+ botAdminsTableName.GetColumnNamesBetweenCommas()
 			+ " FROM "
-			+ std::string(groupsSettingsTableName.nameTable) };
+			+ std::string(botAdminsTableName.nameTable) };
 
-			while (groupsSettingsQuery.executeStep())
-			{
-				UpsertCache(GroupSettings{
-				groupsSettingsQuery.getColumn(0).getInt64(),
-				groupsSettingsQuery.getColumn(1).getInt64(),
-				groupsSettingsQuery.getColumn(2).getInt64(),
-					});
-			}
+		while (getAdmins.executeStep())
+		{
+			UpsertCache(Admin{
+			getAdmins.getColumn(0).getInt64(),
+			getAdmins.getColumn(1).getString(),
+			getAdmins.getColumn(2).getString(),
+			getAdmins.getColumn(3).getString(),
+			static_cast<bool>(getAdmins.getColumn(4).getInt64()),
+			static_cast<bool>(getAdmins.getColumn(5).getInt64()),
+			static_cast<bool>(getAdmins.getColumn(6).getInt64())
+				});
+		}
+
+		//
+
+		SQLite::Statement getGroups{ *botDatabase,
+			"SELECT "
+			+ groupsTableName.GetColumnNamesBetweenCommas()
+			+ " FROM "
+			+ std::string(groupsTableName.nameTable) };
+
+		while (getGroups.executeStep())
+		{
+			UpsertCache(Group{
+			getGroups.getColumn(0).getInt64(),
+			getGroups.getColumn(1).getString(),
+			getGroups.getColumn(2).getString(),
+			static_cast<TgBot::Chat::Type>(getGroups.getColumn(3).getInt64()),
+			static_cast<bool>(getGroups.getColumn(4).getInt64()),
+			static_cast<bool>(getGroups.getColumn(5).getInt64()),
+				});
+		}
+
+		//
+
+		SQLite::Statement getGroupsSettings{ *botDatabase,
+		"SELECT "
+		+ groupsSettingsTableName.GetColumnNamesBetweenCommas()
+		+ " FROM "
+		+ std::string(groupsSettingsTableName.nameTable) };
+
+		while (getGroupsSettings.executeStep())
+		{
+			UpsertCache(GroupSettings{
+			getGroupsSettings.getColumn(0).getInt64(),
+			getGroupsSettings.getColumn(1).getInt64(),
+			getGroupsSettings.getColumn(2).getInt64(),
+				});
 		}
 	}
+
+	///
 
 	bool BotDatabase::TableHasColumn(const std::string& tableName, const std::string_view columnName) const
 	{
@@ -156,6 +166,42 @@ namespace gmb
 				return true;
 
 		return false;
+	}
+
+	///
+
+	const BotDatabase::Admin* BotDatabase::GetAdmin(const int64_t userId) const
+	{
+		const auto it = cache.admins.find(userId);
+
+		if (it != cache.admins.end())
+		{
+			return &it->second;
+		}
+		else
+		{
+			return nullptr;
+		}
+	}
+
+	const std::unordered_map<int64_t, BotDatabase::Admin>& BotDatabase::GetAdmins() const
+	{
+		return cache.admins;
+	}
+
+	bool BotDatabase::IsAdmin(const int64_t userId) const
+	{
+		return cache.admins.contains(userId);
+	}
+
+	bool BotDatabase::IsOwner(const int64_t userId) const
+	{
+		return cache.admins.contains(userId) && cache.admins.at(userId).isBotOwner;
+	}
+
+	size_t BotDatabase::GetNumberAdmins() const
+	{
+		return cache.admins.size();
 	}
 
 	void BotDatabase::AddAdmin(const Admin& user)
@@ -173,7 +219,8 @@ namespace gmb
 			+ botAdminsTableName.GetColumnNamesBetweenCommas()
 			+ ") VALUES("
 			+ botAdminsTableName.GetPlaceholders()
-			+ ')' };
+			+ ") "
+			+ botAdminsTableName.GetOnConflictUpdateSet() };
 
 		query.bind(1, user.id);
 		query.bind(2, user.firstName);
@@ -190,7 +237,7 @@ namespace gmb
 
 	void BotDatabase::UpdateAdmin(const Admin& admin)
 	{
-		if (!Cache.admins.contains(admin.id))
+		if (!cache.admins.contains(admin.id))
 			throw SQLite::Exception("admin \"" + admin.username + "\" does not exists");
 
 		SQLite::Statement query{ *botDatabase,
@@ -200,8 +247,7 @@ namespace gmb
 			+ botAdminsTableName.GetColumnsEqualPlaceholders()
 			+ " WHERE "
 			+ std::string(botAdminsTableName.idColumnName)
-			+ " = "
-			+ std::to_string(admin.id) };
+			+ " =?" };
 
 		query.bind(1, admin.id);
 		query.bind(2, admin.firstName);
@@ -211,6 +257,8 @@ namespace gmb
 		query.bind(6, static_cast<int64_t>(admin.isPremium));
 		query.bind(7, static_cast<int64_t>(admin.isBotOwner));
 
+		query.bind(8, admin.id);
+
 		query.exec();
 
 		UpsertCache(admin);
@@ -218,7 +266,7 @@ namespace gmb
 
 	void BotDatabase::DeleteAdmin(const int64_t id)
 	{
-		if (!Cache.admins.contains(id))
+		if (!cache.admins.contains(id))
 			throw SQLite::Exception("admin does not exist");
 
 		SQLite::Statement query{ *botDatabase,
@@ -234,121 +282,167 @@ namespace gmb
 		DeleteAdminFromCache(id);
 	}
 
+	///
+
+	const BotDatabase::Group* BotDatabase::GetGroup(const int64_t id) const
+	{
+		const auto it = cache.groups.find(id);
+
+		if (it != cache.groups.end())
+		{
+			return &it->second;
+		}
+		else
+		{
+			return nullptr;
+		}
+	}
+
+	const std::unordered_map<int64_t, BotDatabase::Group>& BotDatabase::GetGroups() const
+	{
+		return cache.groups;
+	}
+
 	void BotDatabase::AddGroup(const Group& group, const GroupSettings& groupSettings)
 	{
-		if (Cache.groups.contains(group.id))
+		if (cache.groups.contains(group.id))
 			throw SQLite::Exception("group \"" + group.title + "\" already exists");
 
-		if (Cache.groupIdsByUniqueTitle.contains(group.uniqueTitle))
+		if (cache.groupIdsByUniqueTitle.contains(group.uniqueTitle))
 			throw SQLite::Exception("group with unique title \"" + group.uniqueTitle + "\" already exists");
 
-		{
-			SQLite::Statement query{ *botDatabase,
-				"INSERT INTO "
-				+ std::string(groupsTableName.nameTable)
-				+ " (" + groupsTableName.GetColumnNamesBetweenCommas()
-				+ ") VALUES("
-				+ groupsTableName.GetPlaceholders()
-				+ ')' };
+		SQLite::Transaction transaction(*botDatabase);
 
-			query.bind(1, group.id);
-			query.bind(2, group.title);
-			query.bind(3, group.uniqueTitle);
-			query.bind(4, static_cast<int64_t>(group.type));
-			query.bind(5, static_cast<int64_t>(group.isBotAdmin));
-			query.bind(6, static_cast<int64_t>(group.isBotActive));
+		SQLite::Statement insertGroup{ *botDatabase,
+			"INSERT INTO "
+			+ std::string(groupsTableName.nameTable)
+			+ " (" + groupsTableName.GetColumnNamesBetweenCommas()
+			+ ") VALUES("
+			+ groupsTableName.GetPlaceholders()
+			+ ") "
+			+ groupsTableName.GetOnConflictUpdateSet()};
 
-			query.exec();
+		insertGroup.bind(1, group.id);
+		insertGroup.bind(2, group.title);
+		insertGroup.bind(3, group.uniqueTitle);
+		insertGroup.bind(4, static_cast<int64_t>(group.type));
+		insertGroup.bind(5, static_cast<int64_t>(group.isBotAdmin));
+		insertGroup.bind(6, static_cast<int64_t>(group.isBotActive));
 
-			UpsertCache(group);
-		}
+		insertGroup.exec();
 
-		{
-			SQLite::Statement query{ *botDatabase,
-				"INSERT INTO "
-				+ std::string(groupsSettingsTableName.nameTable)
-				+ " (" + groupsSettingsTableName.GetColumnNamesBetweenCommas()
-				+ ") VALUES("
-				+ groupsSettingsTableName.GetPlaceholders()
-				+ ')' };
+		//
 
-			query.bind(1, groupSettings.id);
-			query.bind(2, groupSettings.numWarnToMute);
-			query.bind(3, groupSettings.numWarnToBan);
+		SQLite::Statement insertGroupSettings{ *botDatabase,
+			"INSERT INTO "
+			+ std::string(groupsSettingsTableName.nameTable)
+			+ " (" + groupsSettingsTableName.GetColumnNamesBetweenCommas()
+			+ ") VALUES("
+			+ groupsSettingsTableName.GetPlaceholders()
+			+ ')' };
 
-			query.exec();
+		insertGroupSettings.bind(1, groupSettings.id);
+		insertGroupSettings.bind(2, groupSettings.numWarnToMute);
+		insertGroupSettings.bind(3, groupSettings.numWarnToBan);
 
-			UpsertCache(groupSettings);
-		}
+		insertGroupSettings.exec();
+
+		transaction.commit();
+
+		UpsertCache(group);
+		UpsertCache(groupSettings);
 	}
 
 	void BotDatabase::UpdateGroup(const Group& group, const GroupSettings& groupSettings)
 	{
-		if (!Cache.groups.contains(group.id))
+		if (!cache.groups.contains(group.id))
 			throw SQLite::Exception("group \"" + group.uniqueTitle + "\" does not exists");
 
-		if (!Cache.groupIdsByUniqueTitle.contains(Cache.groups.at(group.id).uniqueTitle))
+		if (!cache.groupIdsByUniqueTitle.contains(cache.groups.at(group.id).uniqueTitle))
 			throw SQLite::Exception("unique title \"" + group.uniqueTitle + "\" does not exists");
 
-		if (const auto it = Cache.groupIdsByUniqueTitle.find(group.uniqueTitle); it != Cache.groupIdsByUniqueTitle.end() && it->second != group.id)
+		if (const auto it = cache.groupIdsByUniqueTitle.find(group.uniqueTitle); it != cache.groupIdsByUniqueTitle.end() && it->second != group.id)
 			throw SQLite::Exception("group with unique title \"" + group.uniqueTitle + "\" already exists");
 
-		if (Cache.groups.at(group.id) != group)
+		const bool groupHasChanged = cache.groups.at(group.id) != group;
+		const bool groupsSettingsHasChanged = cache.groupsSettings.at(groupSettings.id) != groupSettings;
+
+		SQLite::Transaction transaction(*botDatabase);
+
+		if (groupHasChanged)
 		{
-			SQLite::Statement query{ *botDatabase,
+			SQLite::Statement updateGroup{ *botDatabase,
 				"UPDATE "
 				+ std::string(groupsTableName.nameTable)
 				+ " SET "
 				+ groupsTableName.GetColumnsEqualPlaceholders()
 				+ " WHERE "
 				+ std::string(groupsTableName.idColumnName)
-				+ " = "
-				+ std::to_string(group.id) };
+				+ " =?"};
 
-			query.bind(1, group.id);
-			query.bind(2, group.title);
-			query.bind(3, group.uniqueTitle);
-			query.bind(4, static_cast<int64_t>(group.type));
-			query.bind(5, static_cast<int64_t>(group.isBotAdmin));
-			query.bind(6, static_cast<int64_t>(group.isBotActive));
+			updateGroup.bind(1, group.id);
+			updateGroup.bind(2, group.title);
+			updateGroup.bind(3, group.uniqueTitle);
+			updateGroup.bind(4, static_cast<int64_t>(group.type));
+			updateGroup.bind(5, static_cast<int64_t>(group.isBotAdmin));
+			updateGroup.bind(6, static_cast<int64_t>(group.isBotActive));
+			
+			updateGroup.bind(7, group.id);
 
-			query.exec();
-
-			UpsertCache(group);
+			updateGroup.exec();
 		}
 
-		if (Cache.groupsSettings.at(groupSettings.id) != groupSettings)
+		if (groupsSettingsHasChanged)
 		{
-			SQLite::Statement query{ *botDatabase,
+			SQLite::Statement updateGroupSettings{ *botDatabase,
 				"UPDATE "
 				+ std::string(groupsSettingsTableName.nameTable)
 				+ " SET "
 				+ groupsSettingsTableName.GetColumnsEqualPlaceholders()
 				+ " WHERE "
 				+ std::string(groupsSettingsTableName.idColumnName)
-				+ " = "
-				+ std::to_string(groupSettings.id) };
+				+ " =?" };
 
-			query.bind(1, groupSettings.id);
-			query.bind(2, groupSettings.numWarnToMute);
-			query.bind(3, groupSettings.numWarnToBan);
+			updateGroupSettings.bind(1, groupSettings.id);
+			updateGroupSettings.bind(2, groupSettings.numWarnToMute);
+			updateGroupSettings.bind(3, groupSettings.numWarnToBan);
+			
+			updateGroupSettings.bind(4, groupSettings.id);
 
-			query.exec();
-
-			UpsertCache(groupSettings);
+			updateGroupSettings.exec();
 		}
+
+		transaction.commit();
+
+		if (groupHasChanged) UpsertCache(group);
+		if (groupsSettingsHasChanged) UpsertCache(groupSettings);
 	}
 
-	const std::unordered_map<int64_t, BotDatabase::Group>& BotDatabase::GetGroups() const
+	void BotDatabase::DeleteGroup(const int64_t id)
 	{
-		return Cache.groups;
+		if (!cache.groups.contains(id))
+			throw SQLite::Exception("group does not exist");
+
+		SQLite::Statement query{ *botDatabase,
+			"DELETE FROM "
+			+ std::string(groupsTableName.nameTable)
+			+ " WHERE "
+			+ std::string(groupsTableName.idColumnName)
+			+ " = ?" };
+
+		query.bind(1, id);
+		query.exec();
+
+		DeleteGroupFromCache(id);
 	}
+
+	///
 
 	const BotDatabase::GroupSettings* BotDatabase::GetGroupSettings(const int64_t id) const
 	{
-		const auto it = Cache.groupsSettings.find(id);
+		const auto it = cache.groupsSettings.find(id);
 
-		if (it != Cache.groupsSettings.end())
+		if (it != cache.groupsSettings.end())
 		{
 			return &it->second;
 		}
@@ -360,14 +454,16 @@ namespace gmb
 
 	const std::unordered_map<int64_t, BotDatabase::GroupSettings>& BotDatabase::GetGroupsSettings() const
 	{
-		return Cache.groupsSettings;
+		return cache.groupsSettings;
 	}
+
+	///
 
 	int64_t BotDatabase::GroupIdFromUniqueTitle(const std::string& uniqueTitle) const
 	{
-		const auto it = Cache.groupIdsByUniqueTitle.find(uniqueTitle);
+		const auto it = cache.groupIdsByUniqueTitle.find(uniqueTitle);
 
-		if (it != Cache.groupIdsByUniqueTitle.end())
+		if (it != cache.groupIdsByUniqueTitle.end())
 		{
 			return it->second;
 		}
@@ -379,9 +475,9 @@ namespace gmb
 
 	bool BotDatabase::IsBotActive(const int64_t groupId) const
 	{
-		const auto it = Cache.groups.find(groupId);
+		const auto it = cache.groups.find(groupId);
 
-		if (it != Cache.groups.end())
+		if (it != cache.groups.end())
 		{
 			return it->second.isBotActive;
 		}
@@ -391,47 +487,7 @@ namespace gmb
 		}
 	}
 
-	void BotDatabase::SetWarns(const int64_t userId, const int64_t groupId, const int64_t warns)
-	{
-		SQLite::Statement query{ *botDatabase,
-		"INSERT INTO "
-		+ std::string(usersWarningsTableName.nameTable)
-		+ " (" + usersWarningsTableName.GetColumnNamesBetweenCommas()
-		+ ") VALUES("
-		+ usersWarningsTableName.GetPlaceholders()
-		+ ") ON CONFLICT("
-		+ std::string(usersWarningsTableName.idColumnName)
-		+ ','
-		+ std::string(usersWarningsTableName.groupIdColumnName)
-		+ ") DO UPDATE SET "
-		+ std::string(usersWarningsTableName.quantityWarnColumnName)
-		+ "=?" };
-
-		query.bind(1, userId);
-		query.bind(2, groupId);
-		query.bind(3, std::max(0ll, warns));
-
-		query.bind(4, std::max(0ll, warns));
-
-		query.exec();
-	}
-
-	void BotDatabase::DeleteWarns(const int64_t userId, const int64_t groupId) const
-	{
-		SQLite::Statement query{ *botDatabase,
-		"DELETE FROM "
-		+ std::string(usersWarningsTableName.nameTable)
-		+ " WHERE "
-		+ std::string(usersWarningsTableName.idColumnName)
-		+ " = ? AND "
-		+ std::string(usersWarningsTableName.groupIdColumnName)
-		+ " = ?" };
-
-		query.bind(1, userId);
-		query.bind(2, groupId);
-
-		query.exec();
-	}
+	///
 
 	int64_t BotDatabase::GetWarns(const int64_t userId, const int64_t groupId) const
 	{
@@ -457,163 +513,181 @@ namespace gmb
 		return 0;
 	}
 
-	void BotDatabase::DeleteGroup(const int64_t id)
+	void BotDatabase::SetWarns(const int64_t userId, const int64_t groupId, const int64_t warns)
 	{
-		if (!Cache.groups.contains(id))
-			throw SQLite::Exception("group does not exist");
-
 		SQLite::Statement query{ *botDatabase,
-			"DELETE FROM "
-			+ std::string(groupsTableName.nameTable)
-			+ " WHERE "
-			+ std::string(groupsTableName.idColumnName)
-			+ " = ?" };
+		"INSERT INTO "
+		+ std::string(usersWarningsTableName.nameTable)
+		+ " (" + usersWarningsTableName.GetColumnNamesBetweenCommas()
+		+ ") VALUES("
+		+ usersWarningsTableName.GetPlaceholders()
+		+ ") ON CONFLICT("
+		+ std::string(usersWarningsTableName.idColumnName)
+		+ ','
+		+ std::string(usersWarningsTableName.groupIdColumnName)
+		+ ") DO UPDATE SET "
+		+ std::string(usersWarningsTableName.quantityWarnColumnName)
+		+ "=?" };
 
-		query.bind(1, id);
+		query.bind(1, userId);
+		query.bind(2, groupId);
+		query.bind(3, std::max(static_cast<int64_t>(0), warns));
+
+		query.bind(4, std::max(static_cast<int64_t>(0), warns));
+
 		query.exec();
-
-		DeleteGroupFromCache(id);
 	}
 
-	const BotDatabase::Group* BotDatabase::GetGroup(const int64_t id) const
+	void BotDatabase::DeleteWarns(const int64_t userId, const int64_t groupId) const
 	{
-		const auto it = Cache.groups.find(id);
+		SQLite::Statement query{ *botDatabase,
+		"DELETE FROM "
+		+ std::string(usersWarningsTableName.nameTable)
+		+ " WHERE "
+		+ std::string(usersWarningsTableName.idColumnName)
+		+ " = ? AND "
+		+ std::string(usersWarningsTableName.groupIdColumnName)
+		+ " = ?" };
 
-		if (it != Cache.groups.end())
-		{
-			return &it->second;
-		}
-		else
-		{
-			return nullptr;
-		}
+		query.bind(1, userId);
+		query.bind(2, groupId);
+
+		query.exec();
 	}
 
-	const BotDatabase::Admin* BotDatabase::GetAdmin(const int64_t userId) const
-	{
-		const auto it = Cache.admins.find(userId);
-
-		if (it != Cache.admins.end())
-		{
-			return &it->second;
-		}
-		else
-		{
-			return nullptr;
-		}
-	}
-
-	const std::unordered_map<int64_t, BotDatabase::Admin>& BotDatabase::GetAdmins() const
-	{
-		return Cache.admins;
-	}
-
-	bool BotDatabase::IsAdmin(const int64_t userId) const
-	{
-		return Cache.admins.contains(userId);
-	}
-
-	bool BotDatabase::IsOwner(const int64_t userId) const
-	{
-		return Cache.admins.contains(userId) && Cache.admins.at(userId).isBotOwner;
-	}
-
-	size_t BotDatabase::GetNumberAdmins() const
-	{
-		return Cache.admins.size();
-	}
+	///
 
 	void BotDatabase::UpsertCache(const Admin& admin)
 	{
-		Cache.admins[admin.id] = admin;
+		cache.admins[admin.id] = admin;
 	}
 
 	void BotDatabase::UpsertCache(const Group& group)
 	{
-		auto it = Cache.groups.find(group.id);
+		auto it = cache.groups.find(group.id);
 
-		if (it != Cache.groups.end())
+		if (it != cache.groups.end())
 		{
 			if (it->second.uniqueTitle != group.uniqueTitle)
 			{
-				[[maybe_unused]] const bool eraseUniqueTitle = Cache.groupIdsByUniqueTitle.erase(it->second.uniqueTitle);
+				[[maybe_unused]] const bool eraseUniqueTitle = cache.groupIdsByUniqueTitle.erase(it->second.uniqueTitle);
 
-				Cache.groupIdsByUniqueTitle[group.uniqueTitle] = group.id;
+				cache.groupIdsByUniqueTitle[group.uniqueTitle] = group.id;
 
 				assert(eraseUniqueTitle && "Cache desync");
 			}
 		}
 		else
 		{
-			Cache.groupIdsByUniqueTitle[group.uniqueTitle] = group.id;
+			cache.groupIdsByUniqueTitle[group.uniqueTitle] = group.id;
 		}
 
-		Cache.groups[group.id] = group;
+		cache.groups[group.id] = group;
 	}
 
 	void BotDatabase::UpsertCache(const GroupSettings& groupSettings)
 	{
-		Cache.groupsSettings[groupSettings.id] = groupSettings;
+		cache.groupsSettings[groupSettings.id] = groupSettings;
 	}
 
 	void BotDatabase::DeleteAdminFromCache(const int64_t id)
 	{
-		[[maybe_unused]] const bool eraseAdmin = Cache.admins.erase(id);
+		[[maybe_unused]] const bool eraseAdmin = cache.admins.erase(id);
 
 		assert(eraseAdmin && "Cache desync");
 	}
 
 	void BotDatabase::DeleteGroupFromCache(const int64_t id)
 	{
-		[[maybe_unused]] const bool eraseGroupIdsByUniqueTitle = Cache.groupIdsByUniqueTitle.erase(Cache.groups.at(id).uniqueTitle);
-		[[maybe_unused]] const bool eraseGroup = Cache.groups.erase(id);
-		[[maybe_unused]] const bool eraseGroupSettings = Cache.groupsSettings.erase(id);
+		[[maybe_unused]] const bool eraseGroupIdsByUniqueTitle = cache.groupIdsByUniqueTitle.erase(cache.groups.at(id).uniqueTitle);
+		[[maybe_unused]] const bool eraseGroup = cache.groups.erase(id);
+		[[maybe_unused]] const bool eraseGroupSettings = cache.groupsSettings.erase(id);
 
 		assert(eraseGroupIdsByUniqueTitle && eraseGroup && eraseGroupSettings && "Cache desync");
 	}
 
+	///
+
 	std::string BotDatabase::TableName::GetColumnNamesBetweenCommas() const
 	{
-		std::string AllColumnNames{};
+		assert(!columnNames.empty() && "columnNames is empty");
 
-		AllColumnNames.reserve(columnNames.size() * 5);
+		std::string sql{};
 
-		for (size_t i = 0; i < columnNames.size(); ++i)
+		sql.reserve(columnNames.size() * 5);
+
+		sql += columnNames[0];
+
+		for (size_t i = 1; i < columnNames.size(); ++i)
 		{
-			if (!AllColumnNames.empty()) { AllColumnNames += ','; }
-			AllColumnNames += columnNames[i];
+			sql += ',';
+			sql += columnNames[i];
 		}
 
-		return AllColumnNames;
+		return sql;
 	}
 
 	std::string BotDatabase::TableName::GetPlaceholders() const
 	{
-		std::string Placeholders{};
+		assert(!columnNames.empty() && "Table must have at least 1 columns");
 
-		Placeholders.reserve(columnNames.size() * 2 - 1);
+		std::string sql{};
 
-		for (size_t i = 0; i < columnNames.size(); ++i)
+		sql.reserve(columnNames.size() * 2 - 1);
+
+		sql += "?";
+
+		for (size_t i = 1; i < columnNames.size(); ++i)
 		{
-			Placeholders += (i == 0 ? "?" : ",?");
+			sql += ",?";
 		}
 
-		return Placeholders;
+		return sql;
 	}
 
 	std::string BotDatabase::TableName::GetColumnsEqualPlaceholders() const
 	{
-		std::string ColumnsEqualValues{};
+		assert(!columnNames.empty() && "Table must have at least 1 columns");
 
-		ColumnsEqualValues.reserve(columnNames.size() * 10 - 1);
+		std::string sql{};
 
-		for (size_t i = 0; i < columnNames.size(); ++i)
+		sql.reserve(columnNames.size() * 10 - 1);
+
+		sql += columnNames[0];
+		sql += "=?";
+
+		for (size_t i = 1; i < columnNames.size(); ++i)
 		{
-			if (!ColumnsEqualValues.empty()) { ColumnsEqualValues += ","; }
-			ColumnsEqualValues += columnNames[i];
-			ColumnsEqualValues += "=?";
+			sql += ",";
+			sql += columnNames[i];
+			sql += "=?";
 		}
 
-		return ColumnsEqualValues;
+		return sql;
+	}
+
+	std::string BotDatabase::TableName::GetOnConflictUpdateSet() const
+	{
+		assert(columnNames.size() > 1 && "Table must have at least 2 columns");
+
+		std::string sql{"ON CONFLICT("};
+
+		sql.reserve(columnNames.size() * 18 + 16);
+
+		sql += columnNames[0];
+		sql += ") DO UPDATE SET ";
+		sql += columnNames[1];
+		sql += "=excluded.";
+		sql += columnNames[1];
+
+		for (size_t i = 2; i < columnNames.size(); ++i)
+		{
+			sql += ",";
+			sql += columnNames[i];
+			sql += "=excluded.";
+			sql += columnNames[i];
+		}
+
+		return sql;
 	}
 }

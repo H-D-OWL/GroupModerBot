@@ -4,7 +4,11 @@
 #include <cctype>    
 #include <chrono> 
 #include <thread>
+
+#ifdef _WIN32
 #include <corecrt.h>
+#endif
+
 #include <cstdint> 
 #include <sstream> 
 #include <string> 
@@ -33,47 +37,60 @@ namespace gmb
 			logging::Log(logging::LogSource::Program, logging::LogType::Event, "confirmation code: " + confirmationCode);
 		}
 
-		bot.getEvents().onCommand("start",					[this](TgBot::Message::Ptr message) { SafeExecute(logging::ContextLog::ToContextLog(message, "start"),						[&]() { return OnStart(message); }); });
+		AddBotCommand(gmb::consts::command::start, &BotController::OnStart);
 
-		bot.getEvents().onCommand("botActive",				[this](TgBot::Message::Ptr message) { SafeExecute(logging::ContextLog::ToContextLog(message, "botActive"),					[&]() { return OnBotActive(message); }); });
-		bot.getEvents().onCommand("botDeactive",			[this](TgBot::Message::Ptr message) { SafeExecute(logging::ContextLog::ToContextLog(message, "botDeactive"),				[&]() { return OnBotDeactive(message); }); });
+		AddBotCommand(gmb::consts::command::botActive, &BotController::OnBotActive);
+		AddBotCommand(gmb::consts::command::botDeactive, &BotController::OnBotDeactive);
 
-		bot.getEvents().onCommand("groups",					[this](TgBot::Message::Ptr message) { SafeExecute(logging::ContextLog::ToContextLog(message, "groups"),						[&]() { return OnGroups(message); }); });
-		bot.getEvents().onCommand("setGroupUniqueTitle",	[this](TgBot::Message::Ptr message) { SafeExecute(logging::ContextLog::ToContextLog(message, "setGroupUniqueTitle"),		[&]() { return OnSetGroupUniqueTitle(message); }); });
+		AddBotCommand(gmb::consts::command::groups, &BotController::OnGroups);
+		AddBotCommand(gmb::consts::command::setGroupUniqueTitle, &BotController::OnSetGroupUniqueTitle);
 
-		bot.getEvents().onCommand("admins",					[this](TgBot::Message::Ptr message) { SafeExecute(logging::ContextLog::ToContextLog(message, "admins"),						[&]() { return OnAdmins(message); }); });
-		bot.getEvents().onCommand("addAdmin",				[this](TgBot::Message::Ptr message) { SafeExecute(logging::ContextLog::ToContextLog(message, "addAdmin"),					[&]() { return OnAddAdmin(message); }); });
-		bot.getEvents().onCommand("removeAdmin",			[this](TgBot::Message::Ptr message) { SafeExecute(logging::ContextLog::ToContextLog(message, "removeAdmin"),				[&]() { return OnRemoveAdmin(message); }); });
+		AddBotCommand(gmb::consts::command::admins, &BotController::OnAdmins);
+		AddBotCommand(gmb::consts::command::addAdmin, &BotController::OnAddAdmin);
+		AddBotCommand(gmb::consts::command::removeAdmin, &BotController::OnRemoveAdmin);
 
-		bot.getEvents().onCommand("setWarnMuteSettings",	[this](TgBot::Message::Ptr message) { SafeExecute(logging::ContextLog::ToContextLog(message, "setWarnMuteSettings"),		[&]() { return OnSetWarnMuteSettings(message); }); });
-		bot.getEvents().onCommand("setWarnBanSettings",		[this](TgBot::Message::Ptr message) { SafeExecute(logging::ContextLog::ToContextLog(message, "setWarnBanSettings"),			[&]() { return OnSetWarnBanSettings(message); }); });
+		AddBotCommand(gmb::consts::command::setWarnMuteSettings, &BotController::OnSetWarnMuteSettings);
+		AddBotCommand(gmb::consts::command::setWarnBanSettings, &BotController::OnSetWarnBanSettings);
 
-		bot.getEvents().onCommand("addWarn",				[this](TgBot::Message::Ptr message) { SafeExecute(logging::ContextLog::ToContextLog(message, "addWarn"),					[&]() { return OnSetWarn(message); }); });
-		bot.getEvents().onCommand("removeWarn",				[this](TgBot::Message::Ptr message) { SafeExecute(logging::ContextLog::ToContextLog(message, "removeWarn"),					[&]() { return OnSetWarn(message); }); });
-		bot.getEvents().onCommand("setWarn",				[this](TgBot::Message::Ptr message) { SafeExecute(logging::ContextLog::ToContextLog(message, "setWarn"),					[&]() { return OnSetWarn(message); }); });
-		bot.getEvents().onCommand("viewWarn",				[this](TgBot::Message::Ptr message) { SafeExecute(logging::ContextLog::ToContextLog(message, "viewWarn"),					[&]() { return OnViewWarn(message); }); });
+		AddBotCommand(gmb::consts::command::addWarn, &BotController::OnSetWarn);
+		AddBotCommand(gmb::consts::command::removeWarn, &BotController::OnSetWarn);
+		AddBotCommand(gmb::consts::command::setWarn, &BotController::OnSetWarn);
+		AddBotCommand(gmb::consts::command::viewWarn, &BotController::OnViewWarn);
 
-		bot.getEvents().onMyChatMember(						[this](TgBot::ChatMemberUpdated::Ptr update) { SafeExecute(logging::ContextLog::ToContextLog(update, "changeMyChatMember"),	[&]() { return OnMyChatMember(update); }); });
+		AddBotCommand(gmb::consts::command::disableBot, &BotController::OnDisableBot);
+
+		bot.getEvents().onMyChatMember([this](TgBot::ChatMemberUpdated::Ptr update) { SafeExecute(logging::LogSource::Bot, logging::LogType::Event, logging::ContextLog::ToContextLog(update, gmb::consts::event::botChatMemberUpdated), [this, update]() { return OnMyChatMember(update); }); });
+
+		bot.getApi().setMyCommands(uiCommands);
 	}
 
-	void BotController::Run()
+	void BotController::Run(const bool enableProcessPendingUpdates)
 	{
+		if (enableProcessPendingUpdates) ProcessPendingUpdates();
+
+		gmb::logging::Log(gmb::logging::LogSource::Bot, gmb::logging::LogType::Event, [this]() {
+			std::string text = "bot: \"";
+			text += bot.getApi().getMe()->username;
+			text += "\" has been launched";
+			return text;
+			}());
+
 		TgBot::TgLongPoll longPoll(bot);
 
-		while (true)
+		while (botWorking)
 		{
-			SafeExecute(logging::ContextLog{}, [&]() -> logging::OnEventResult {
-				while (true) { longPoll.start(); }
+			SafeExecute(logging::LogSource::Program, logging::LogType::Event, logging::ContextLog{}, [&]() -> logging::OnEventResult {
+				while (botWorking) { longPoll.start(); }
 				return { "", "" }; });
 
-			std::this_thread::sleep_for(std::chrono::seconds(5));
+			if(botWorking) std::this_thread::sleep_for(std::chrono::seconds(5));
 		}
 	}
 
 	logging::OnEventResult BotController::OnStart(TgBot::Message::Ptr message)
 	{
 		if (message->chat->type != TgBot::Chat::Type::Private) return { gmb::msg::log::nonPrivateChat, "" };
-
+		
 		if (botDatabase.IsOwner(message->from->id))
 		{
 			return { gmb::msg::log::fromOwner, R"(
@@ -83,33 +100,33 @@ You can control me by sending the following commands:
 
 In a private chat:
 
-/start - get information about commands
+/start - Show available commands
+/disable_bot - Turn off the bot completely
 
 Group Settings
-/groups - get information about groups containing the bot
-/setGroupUniqueTitle - change the uniqueTitle for a group
+/groups - List all groups containing the bot
+/set_group_unique_title - Change the uniqueTitle for a group
 
 Managing Bot Administrators
-/admins - get information about all bot administrators
-/addAdmin - get the Administrator Verification Code
-/removeAdmin - remove a bot administrator
+/admins - List all bot administrators
+/add_admin - Generate an AdminConfirmationCode.
+/remove_admin - Remove an admin using their index number from /admins
 
 Warning Settings
-/setWarnMuteSettings - set the number of warnings before a group member is mute
-/setWarnBanSettings - set the number of warnings before banning a group member
+/set_warn_mute_settings - Set the number of warnings after which a group member will be muted. Default: 3. Mute duration (days) = Fibonacci(UserWarns?QuantityWarnToMute)
+/set_warn_ban_settings - Set the number of warnings before banning a group member. Default: 5
 
 In a group:
 
 Bot Management
-/botActive - activates the bot in the group
-/botDeactive - deactivates the bot in the group
+/bot_active - Activates the bot. The bot begins executing commands in the group
+/bot_deactive - Deactivate the bot. The bot stops executing commands in the group
 
 Managing Warnings
-
-/addWarn - add the specified number of warnings to a member
-/removeWarn - remove the specified number of warnings to a member member
-/setWarn - set the specified number of warnings for a member
-/viewWarn - get the number of warnings for a member
+/add_warn - Add the specified number of warnings to a member. Default: 1
+/remove_warn - Remove the specified number of warnings to a member. Default: 1
+/set_warn - Set the specified number of warnings for a member
+/view_warn - Check the current number of warnings for a member
 )" };
 		}
 		else if (botDatabase.IsAdmin(message->from->id))
@@ -121,25 +138,25 @@ You can control me by sending the following commands:
 
 In a private chat:
 
-/start - get information about commands
+/start - Show available commands
 
 Group Settings
-/groups - get information about groups containing the bot
+/groups - List all groups containing the bot
 
 Managing Bot Administrators
-/admins - get information about all bot administrators
+/admins - List all bot administrators
 
 Warning Settings
-/setWarnMuteSettings - set the number of warnings before a group member is mute
-/setWarnBanSettings - set the number of warnings before banning a group member
+/set_warn_mute_settings - Set the number of warnings after which a group member will be muted. Default: 3. Mute duration (days) = Fibonacci(UserWarns?QuantityWarnToMute)
+/set_warn_ban_settings - Set the number of warnings before banning a group member. Default: 5
 
 In a group:
 
 Managing Warnings
-/addWarn - add the specified number of warnings to a member
-/removeWarn - remove the specified number of warnings to a member member
-/setWarn - set the specified number of warnings for a member
-/viewWarn - get the number of warnings for a member
+/add_warn - Add the specified number of warnings to a member. Default: 1
+/remove_warn - Remove the specified number of warnings to a member. Default: 1
+/set_warn - Set the specified number of warnings for a member
+/view_warn - Check the current number of warnings for a member
 )" };
 		}
 		else if (botDatabase.GetNumberAdmins() == 0)
@@ -151,10 +168,10 @@ You can control me by sending the following commands:
 
 In a private chat:
 
-/start - get information about commands
+/start - Show available commands
 
 Managing Bot Administrators
-/addAdmin - become an owner by entering the Verification Code
+/add_admin -  Become the owner by entering the confirmation code
 )" };
 		}
 		else
@@ -166,10 +183,10 @@ You can control me by sending the following commands:
 
 In a private chat:
 
-/start - get information about commands
+/start - Show available commands
 
 Managing Bot Administrators
-/addAdmin - become an administrator by entering the Administrator Verification Code
+/add_admin - Become an admin by entering the confirmation code
 )" };
 		}
 	}
@@ -178,17 +195,24 @@ Managing Bot Administrators
 	{
 		if (message->chat->type == TgBot::Chat::Type::Private) return { gmb::msg::log::privateChat, "" };
 
+		if (botDatabase.IsBotActive(message->chat->id)) return { gmb::msg::log::botIsActive,  gmb::msg::chat::botIsActive };
+
 		if (botDatabase.IsOwner(message->from->id))
 		{
-			const BotDatabase::Group& group = botDatabase.GetGroups().at(message->chat->id);
-			const BotDatabase::GroupSettings& groupSettings = botDatabase.GetGroupsSettings().at(group.id);
+			const BotDatabase::Group* group = botDatabase.GetGroup(message->chat->id);
 
-			BotDatabase::Group updateGroup = group;
+			if (group == nullptr ) return { gmb::msg::log::groupNotFoundInCache, gmb::msg::log::groupNotFoundInCache };
+
+			const BotDatabase::GroupSettings* groupSettings = botDatabase.GetGroupSettings(message->chat->id);
+
+			if (groupSettings == nullptr) return { gmb::msg::log::groupSettingsNotFoundInCache, gmb::msg::log::groupSettingsNotFoundInCache };
+
+			BotDatabase::Group updateGroup = *group;
 			updateGroup.isBotActive = true;
 
-			botDatabase.UpdateGroup(updateGroup, groupSettings);
+			botDatabase.UpdateGroup(updateGroup, *groupSettings);
 
-			return { "bot has been activated", "The bot has been activated" };
+			return { "bot has been activated", "the bot has been activated" };
 		}
 		else if (botDatabase.IsAdmin(message->from->id))
 		{
@@ -208,15 +232,20 @@ Managing Bot Administrators
 
 		if (botDatabase.IsOwner(message->from->id))
 		{
-			const BotDatabase::Group& group = botDatabase.GetGroups().at(message->chat->id);
-			const BotDatabase::GroupSettings& groupSettings = botDatabase.GetGroupsSettings().at(group.id);
+			const BotDatabase::Group* group = botDatabase.GetGroup(message->chat->id);
 
-			BotDatabase::Group updateGroup = group;
+			if (group == nullptr) return { gmb::msg::log::groupNotFoundInCache, gmb::msg::log::groupNotFoundInCache };
+
+			const BotDatabase::GroupSettings* groupSettings = botDatabase.GetGroupSettings(message->chat->id);
+
+			if (groupSettings == nullptr) return { gmb::msg::log::groupSettingsNotFoundInCache, gmb::msg::log::groupSettingsNotFoundInCache };
+
+			BotDatabase::Group updateGroup = *group;
 			updateGroup.isBotActive = false;
 
-			botDatabase.UpdateGroup(updateGroup, groupSettings);
+			botDatabase.UpdateGroup(updateGroup, *groupSettings);
 
-			return { "bot has been deactivated", "The bot has been deactivated" };
+			return { "bot has been deactivated", "the bot has been deactivated" };
 		}
 		else if (botDatabase.IsAdmin(message->from->id))
 		{
@@ -285,7 +314,7 @@ Managing Bot Administrators
 
 		if (!botDatabase.IsOwner(message->from->id)) return { gmb::msg::log::notFromOwner, gmb::msg::chat::cannotUseCommand };
 
-		std::stringstream commandParameters(message->text.substr("/setGroupUniqueTitle"sv.size()));
+		std::stringstream commandParameters(message->text.substr(gmb::consts::command::setGroupUniqueTitle.size() + 1));
 
 		std::string oldUniqueTitle{}, newUniqueTitle{};
 
@@ -300,7 +329,7 @@ Managing Bot Administrators
 		const BotDatabase::Group& group = botDatabase.GetGroups().at(botDatabase.GroupIdFromUniqueTitle(oldUniqueTitle));
 		const BotDatabase::GroupSettings& groupSettings = botDatabase.GetGroupsSettings().at(group.id);
 
-		BotDatabase::Group updateGroup = group;
+		BotDatabase::Group updateGroup{ group };
 		updateGroup.uniqueTitle = newUniqueTitle;
 
 		botDatabase.UpdateGroup(updateGroup, groupSettings);
@@ -349,84 +378,63 @@ Managing Bot Administrators
 
 	logging::OnEventResult BotController::OnAddAdmin(TgBot::Message::Ptr message)
 	{
-		using namespace std::string_view_literals;
-
 		if (message->chat->type != TgBot::Chat::Type::Private) return { gmb::msg::log::nonPrivateChat, "" };
 
 		if (botDatabase.IsOwner(message->from->id))
 		{
-			confirmationCode.clear();
-
 			confirmationCode = RandomNumberGenerator(32);
 
 			return { "confirmation code generated", "confirmation code = " + confirmationCode };
 		}
-		else if (botDatabase.IsAdmin(message->from->id))
+		
+		if (botDatabase.IsAdmin(message->from->id))
 		{
 			return { gmb::msg::log::fromAdmin, gmb::msg::chat::cannotUseCommand };
 		}
-		else
+
+		std::stringstream commandParameters(message->text.substr(gmb::consts::command::addAdmin.size() + 1));
+
+		std::string adminConfirmationCode{};
+
+		if (!(commandParameters >> adminConfirmationCode)) return { gmb::msg::log::invalidCommandParameters, gmb::msg::chat::invalidCommandParameters };
+
+		if (confirmationCode == gmb::consts::invalidTextData)
 		{
-			std::stringstream commandParameters(message->text.substr("/addAdmin"sv.size()));
-
-			std::string adminConfirmationCode{};
-
-			if (!(commandParameters >> adminConfirmationCode)) return { gmb::msg::log::invalidCommandParameters, gmb::msg::chat::invalidCommandParameters };
-
-			if (confirmationCode != "ERROR" && adminConfirmationCode == confirmationCode && botDatabase.GetNumberAdmins() == 0)
-			{
-				botDatabase.AddAdmin(BotDatabase::Admin{
-				message->from->id,
-				message->from->firstName,
-				message->from->lastName,
-				message->from->username,
-				message->from->isBot,
-				message->from->isPremium,
-				true
-					});
-
-				confirmationCode = "ERROR";
-
-				return { "user became bot owner", "you have become a bot owner" };
-			}
-			else if (confirmationCode != "ERROR" && adminConfirmationCode == confirmationCode && botDatabase.GetNumberAdmins() > 0)
-			{
-				botDatabase.AddAdmin(BotDatabase::Admin{
-				message->from->id,
-				message->from->firstName,
-				message->from->lastName,
-				message->from->username,
-				message->from->isBot,
-				message->from->isPremium,
-				false
-					});
-
-				confirmationCode = "ERROR";
-
-				return { "user became bot admin", "you have become a bot admin" };
-			}
-			else if (confirmationCode != "ERROR" && !adminConfirmationCode.empty())
-			{
-				return { "confirmation code is incorrect", "The confirmation code is incorrect" };
-			}
-			else if (confirmationCode == "ERROR")
-			{
-				return { "confirmation code not generated", "confirmation code not generated" };
-			}
-
-			return { gmb::msg::unknownError, gmb::msg::unknownError };
+			return { "confirmation code not generated", "confirmation code not generated" };
 		}
+
+		if (adminConfirmationCode != confirmationCode)
+		{
+			return { "confirmation code is incorrect", "the confirmation code is incorrect" };
+		}
+
+		const bool isOwner{ botDatabase.GetNumberAdmins() == 0 };
+
+		botDatabase.AddAdmin(BotDatabase::Admin{
+		message->from->id,
+		message->from->firstName,
+		message->from->lastName,
+		message->from->username,
+		message->from->isBot,
+		message->from->isPremium,
+		isOwner
+			});
+
+		confirmationCode = gmb::consts::invalidTextData;
+
+		if(isOwner)
+			return { "user became bot owner", "you have become a bot owner" };
+		else
+			return { "user became bot admin", "you have become a bot admin" };
 	}
 
 	logging::OnEventResult BotController::OnRemoveAdmin(TgBot::Message::Ptr message)
 	{
-		using namespace std::string_view_literals;
-
 		if (message->chat->type != TgBot::Chat::Type::Private) return { gmb::msg::log::nonPrivateChat, "" };
 
 		if (!botDatabase.IsOwner(message->from->id)) return { gmb::msg::log::notFromOwner, gmb::msg::chat::cannotUseCommand };
 
-		std::stringstream commandParameters(message->text.substr("/removeAdmin"sv.size()));
+		std::stringstream commandParameters(message->text.substr(gmb::consts::command::removeAdmin.size() + 1));
 
 		size_t adminNumber{};
 
@@ -434,7 +442,7 @@ Managing Bot Administrators
 
 		--adminNumber;
 
-		if (!(adminNumber >= 0 && adminNumber < botDatabase.GetNumberAdmins())) return { gmb::msg::log::invalidCommandParameters, gmb::msg::chat::invalidCommandParameters };
+		if (!(adminNumber < botDatabase.GetNumberAdmins())) return { gmb::msg::log::invalidCommandParameters, gmb::msg::chat::invalidCommandParameters };
 
 		size_t count = 0;
 
@@ -461,13 +469,11 @@ Managing Bot Administrators
 
 	logging::OnEventResult BotController::OnSetWarnMuteSettings(TgBot::Message::Ptr message)
 	{
-		using namespace std::string_view_literals;
-
 		if (message->chat->type != TgBot::Chat::Type::Private) return { gmb::msg::log::nonPrivateChat, "" };
 
 		if (!botDatabase.IsAdmin(message->from->id)) return { gmb::msg::log::fromGuest, gmb::msg::chat::cannotUseCommand };
 
-		std::stringstream commandParameters(message->text.substr("/setWarnMuteSettings"sv.size()));
+		std::stringstream commandParameters(message->text.substr(gmb::consts::command::setWarnMuteSettings.size() + 1));
 
 		std::string uniqueTitle{};
 
@@ -487,18 +493,16 @@ Managing Bot Administrators
 
 		botDatabase.UpdateGroup(group, updategroupSettings);
 
-		return { "warn mute settings changed", "warn mute settings changed" };
+		return { "warn mute settings changed: " + std::to_string(updategroupSettings.numWarnToMute), "warn mute settings changed: " + std::to_string(updategroupSettings.numWarnToMute) };
 	}
 
 	logging::OnEventResult BotController::OnSetWarnBanSettings(TgBot::Message::Ptr message)
 	{
-		using namespace std::string_view_literals;
-
 		if (message->chat->type != TgBot::Chat::Type::Private) return { gmb::msg::log::nonPrivateChat, "" };
 
 		if (!botDatabase.IsAdmin(message->from->id)) return { gmb::msg::log::fromGuest, gmb::msg::chat::cannotUseCommand };
 
-		std::stringstream commandParameters(message->text.substr("/setWarnBanSettings"sv.size()));
+		std::stringstream commandParameters(message->text.substr(gmb::consts::command::setWarnBanSettings.size() + 1));
 
 		std::string uniqueTitle{};
 
@@ -518,7 +522,7 @@ Managing Bot Administrators
 
 		botDatabase.UpdateGroup(group, updategroupSettings);
 
-		return { "warn ban settings changed", "warn ban settings changed" };
+		return { "warn ban settings changed: " + std::to_string(updategroupSettings.numWarnToBan), "warn ban settings changed: " + std::to_string(updategroupSettings.numWarnToBan) };
 	}
 
 	logging::OnEventResult BotController::OnSetWarn(TgBot::Message::Ptr message)
@@ -535,6 +539,11 @@ Managing Bot Administrators
 
 		if (botDatabase.IsAdmin(replyToMessage->from->id)) return { "admins cannot influence each other", "admins cannot influence each other" };
 
+#ifndef NDEBUG
+#else
+		if (replyToMessage->from->isBot) return { "bot cannot be given warnings", "the bot cannot be given warnings" };
+#endif
+
 		std::stringstream commandParameters(message->text);
 
 		std::string comand{};
@@ -545,141 +554,118 @@ Managing Bot Administrators
 
 		const std::string memberStatus = bot.getApi().getChatMember(groupSettings.id, replyToMessage->from->id)->status;
 
-		if (memberStatus == "left") return { gmb::msg::log::userNotInGroup, gmb::msg::chat::userNotInGroup };
-
 		const int64_t previousQuantityWarn = botDatabase.GetWarns(replyToMessage->from->id, groupSettings.id);
 
-		int64_t newQuantityWarns = 0, arg = 0;
+		int64_t newQuantityWarns{}, arg{};
 
-		if (comand == "/addWarn")
+		if (const size_t pos = comand.find('@'); pos != comand.npos) { comand = comand.substr(0, pos); }
+
+		if (!comand.empty() && comand[0] == '/') { comand = comand.substr(1); }
+
+		if (comand == gmb::consts::command::addWarn)
 		{
 			if (!(commandParameters >> arg)) arg = 1;
 
 			newQuantityWarns = previousQuantityWarn + arg;
 		}
-		else if (comand == "/removeWarn")
+		else if (comand == gmb::consts::command::removeWarn)
 		{
 			if (!(commandParameters >> arg)) arg = 1;
 
 			newQuantityWarns = previousQuantityWarn - arg;
 		}
-		else if (comand == "/setWarn")
+		else if (comand == gmb::consts::command::setWarn)
 		{
 			if (!(commandParameters >> newQuantityWarns)) return { gmb::msg::log::invalidCommandParameters, gmb::msg::chat::invalidCommandParameters };
 		}
 		else
 			return { gmb::msg::log::invalidCommandParameters, gmb::msg::chat::invalidCommandParameters };
 
-		newQuantityWarns = std::max(0ll, newQuantityWarns);
+		newQuantityWarns = std::max(static_cast<int64_t>(0), newQuantityWarns);
+
+		const bool banEnabled = groupSettings.numWarnToBan > 0;
+		const bool muteEnabled = groupSettings.numWarnToMute > 0;
+
+		const bool shouldBeBanned = banEnabled && (newQuantityWarns >= groupSettings.numWarnToBan);
+		const bool shouldBeMuted = muteEnabled && (newQuantityWarns >= groupSettings.numWarnToMute) && !shouldBeBanned;
+		const bool isSafe = !shouldBeBanned && !shouldBeMuted;
+
+		std::string resultLogMsg{};
+		std::string resultChatMsg{};
+
+		if (shouldBeBanned) //ban
+		{
+			if (memberStatus == "kicked") //user already banned
+			{
+				resultLogMsg = "user already banned. Warnings: " + std::to_string(newQuantityWarns);
+				resultChatMsg = "the user is already banned. Warnings: " + std::to_string(newQuantityWarns);
+			}
+			else
+			{
+				if (!bot.getApi().banChatMember(replyToMessage->chat->id, replyToMessage->from->id))
+					return { "user could not be banned", "the user could not be banned" }; //ban failed
+
+				resultLogMsg = "user banned. Warnings: " + std::to_string(newQuantityWarns);
+				resultChatMsg = "the user is banned. Warnings: " + std::to_string(newQuantityWarns);
+			}
+		}
+		else if (memberStatus == "left") 
+		{
+			resultLogMsg = gmb::msg::log::userNotInGroup + ". Warnings: " + std::to_string(newQuantityWarns);
+			resultChatMsg = gmb::msg::chat::userNotInGroup + ". Warnings: " + std::to_string(newQuantityWarns);
+		}
+		else if(shouldBeMuted) //mute
+		{
+			if (newQuantityWarns == previousQuantityWarn && memberStatus == "restricted") //number warnings not changed
+				return { "number warnings not changed: " + std::to_string(previousQuantityWarn), "the number of warnings has not changed: " + std::to_string(previousQuantityWarn) };
+
+			if (memberStatus == "kicked" && !bot.getApi().unbanChatMember(replyToMessage->chat->id, replyToMessage->from->id, true)) 
+				return { "user could not be unbanned to mute", "the user could not be unbanned to mute" }; //unban failed
+			
+			const auto untilTimePoint = std::chrono::system_clock::now() + std::chrono::hours(Fibonacci(newQuantityWarns - groupSettings.numWarnToMute) * 24);
+
+			const time_t untilTimestamp = std::chrono::system_clock::to_time_t(untilTimePoint);
+
+			if (!bot.getApi().restrictChatMember(replyToMessage->chat->id, replyToMessage->from->id, std::make_shared<TgBot::ChatPermissions>(false), static_cast<uint32_t>(untilTimestamp))) 
+				return { "user could not be muted", "the user could not be muted" }; //mute failed
+			
+			resultLogMsg = "user muted / mute updated. Warnings: " + std::to_string(newQuantityWarns);
+			resultChatMsg = "the user is muted. Warnings: " + std::to_string(newQuantityWarns);
+		}
+		else if(isSafe)
+		{
+			if (newQuantityWarns == previousQuantityWarn) 
+				return { "number warnings not changed: " + std::to_string(previousQuantityWarn), "the number of warnings has not changed: " + std::to_string(previousQuantityWarn) }; //number warnings not changed
+
+			if (memberStatus == "kicked")
+			{
+				if (!bot.getApi().unbanChatMember(replyToMessage->chat->id, replyToMessage->from->id, true)) 
+					return { "user could not be unbanned", "the user could not be unbanned" }; //unban failed
+				
+				resultLogMsg = "user unbanned. Warnings: " + std::to_string(newQuantityWarns);
+				resultChatMsg = "the user is unbanned. Warnings: " + std::to_string(newQuantityWarns);
+			}
+			else if (memberStatus == "restricted")
+			{
+				if (!bot.getApi().restrictChatMember(replyToMessage->chat->id, replyToMessage->from->id, std::make_shared<TgBot::ChatPermissions>(true, true, true, true, true, true, true, true, true, true, true, true, true, true)))
+					return { "user could not be unmuted", "the user could not be unmuted" }; //unmute failed
+				
+				resultLogMsg = "user unmuted. Warnings: " + std::to_string(newQuantityWarns);
+				resultChatMsg = "the user is unmuted. Warnings: " + std::to_string(newQuantityWarns);
+			}
+			else
+			{
+				resultLogMsg = "number warnings changed: " + std::to_string(newQuantityWarns);
+				resultChatMsg = "the number of warnings has changed: " + std::to_string(newQuantityWarns);
+			}
+		}
 
 		if (newQuantityWarns == 0)
 			botDatabase.DeleteWarns(replyToMessage->from->id, groupSettings.id);
 		else
 			botDatabase.SetWarns(replyToMessage->from->id, groupSettings.id, newQuantityWarns);
 
-		if (newQuantityWarns >= groupSettings.numWarnToBan && groupSettings.numWarnToBan > 0)
-		{
-			if (memberStatus == "kicked") return { gmb::msg::log::userNotInGroup, gmb::msg::chat::userNotInGroup };
-
-			if (!bot.getApi().banChatMember(replyToMessage->chat->id, replyToMessage->from->id))
-			{
-				botDatabase.SetWarns(replyToMessage->from->id, groupSettings.id, previousQuantityWarn);
-
-				return { "user could not be banned", "the user could not be banned" };
-			}
-
-			return { "user banned", "the user is banned" };
-		}
-		else if (newQuantityWarns >= groupSettings.numWarnToMute && newQuantityWarns < groupSettings.numWarnToBan && groupSettings.numWarnToMute > 0)
-		{
-			if (newQuantityWarns > previousQuantityWarn || (newQuantityWarns < previousQuantityWarn && memberStatus == "restricted"))
-			{
-				TgBot::ChatPermissions::Ptr permissions{ new TgBot::ChatPermissions };
-
-				permissions->canSendMessages = false;
-				permissions->canSendOtherMessages = false;
-				permissions->canSendAudios = false;
-				permissions->canSendDocuments = false;
-				permissions->canSendPhotos = false;
-				permissions->canSendPolls = false;
-				permissions->canSendVideoNotes = false;
-				permissions->canSendVideos = false;
-				permissions->canSendVoiceNotes = false;
-				permissions->canAddWebPagePreviews = false;
-
-				auto untilTimePoint = std::chrono::system_clock::now() + std::chrono::hours(Fibonacci(newQuantityWarns - groupSettings.numWarnToMute) * 24);
-
-				time_t untilTimestamp = std::chrono::system_clock::to_time_t(untilTimePoint);
-
-				if (!bot.getApi().restrictChatMember(replyToMessage->chat->id, replyToMessage->from->id, permissions, untilTimestamp))
-				{
-					botDatabase.SetWarns(replyToMessage->from->id, groupSettings.id, previousQuantityWarn);
-
-					return { "user could not be muted", "the user could not be muted" };
-				}
-
-				return { "user muted", "the user is muted" };
-			}
-			else if (newQuantityWarns < previousQuantityWarn)
-			{
-				if (memberStatus != "kicked") return { std::to_string(replyToMessage->from->id) + " (" + replyToMessage->from->username + ')' + " now has " + std::to_string(newQuantityWarns) + " warn",
-					std::to_string(replyToMessage->from->id) + " (" + replyToMessage->from->username + ')' + " now has " + std::to_string(newQuantityWarns) + " warn" };
-
-				if (!bot.getApi().unbanChatMember(replyToMessage->chat->id, replyToMessage->from->id, true))
-				{
-					botDatabase.SetWarns(replyToMessage->from->id, groupSettings.id, previousQuantityWarn);
-
-					return { "user could not be unbanned", "the user could not be unbanned" };
-				}
-
-				return { "user unbanned", "the user is unbanned" };
-			}
-			else
-				return { gmb::msg::unknownBehavior, gmb::msg::unknownBehavior };
-		}
-		else if (newQuantityWarns < groupSettings.numWarnToMute)
-		{
-			if (memberStatus == "restricted")
-			{
-				TgBot::ChatPermissions::Ptr permissions{ new TgBot::ChatPermissions };
-
-				permissions->canSendMessages = true;
-				permissions->canSendOtherMessages = true;
-				permissions->canSendAudios = true;
-				permissions->canSendDocuments = true;
-				permissions->canSendPhotos = true;
-				permissions->canSendPolls = true;
-				permissions->canSendVideoNotes = true;
-				permissions->canSendVideos = true;
-				permissions->canSendVoiceNotes = true;
-				permissions->canAddWebPagePreviews = true;
-
-				if (!bot.getApi().restrictChatMember(replyToMessage->chat->id, replyToMessage->from->id, permissions))
-				{
-					botDatabase.SetWarns(replyToMessage->from->id, groupSettings.id, previousQuantityWarn);
-
-					return { "user could not be unmuted", "the user could not be unmuted" };
-				}
-
-				return { "user unmuted", "the user is unmuted" };
-			}
-			else if (memberStatus == "kicked")
-			{
-				if (!bot.getApi().unbanChatMember(replyToMessage->chat->id, replyToMessage->from->id, true))
-				{
-					botDatabase.SetWarns(replyToMessage->from->id, groupSettings.id, previousQuantityWarn);
-
-					return { "user could not be unbanned", "the user could not be unbanned" };
-				}
-
-				return { "user unbanned", "the user is unbanned" };
-			}
-			else
-				return { std::to_string(replyToMessage->from->id) + " (" + replyToMessage->from->username + ')' + " now has " + std::to_string(newQuantityWarns) + " warn",
-					std::to_string(replyToMessage->from->id) + " (" + replyToMessage->from->username + ')' + " now has " + std::to_string(newQuantityWarns) + " warn" };
-		}
-		else
-			return { gmb::msg::unknownBehavior, gmb::msg::unknownBehavior };
+		return { resultLogMsg, resultChatMsg };
 	}
 
 	logging::OnEventResult BotController::OnViewWarn(TgBot::Message::Ptr message)
@@ -694,14 +680,27 @@ Managing Bot Administrators
 
 		if (!replyToMessage) return { gmb::msg::log::notReplyToMessage,  gmb::msg::chat::notReplyToMessage };
 		
+		const std::string quantityWarns{ std::to_string(botDatabase.GetWarns(replyToMessage->from->id, message->chat->id)) };
+
 		std::string textMessage{};
 
 		textMessage += replyToMessage->from->firstName;
 		textMessage += " has ";
-		textMessage += std::to_string(botDatabase.GetWarns(replyToMessage->from->id, message->chat->id));
+		textMessage += quantityWarns;
 		textMessage += " warnings";
 
-		return { "viewed warns " + replyToMessage->from->username + '(' + std::to_string(replyToMessage->from->id) + ')', "", textMessage};
+		return { "viewed warns " + std::to_string(replyToMessage->from->id) + " (" + replyToMessage->from->firstName + "). Warnings: " + quantityWarns, "", textMessage};
+	}
+
+	logging::OnEventResult BotController::OnDisableBot(TgBot::Message::Ptr message)
+	{
+		if (message->chat->type != TgBot::Chat::Type::Private) return { gmb::msg::log::nonPrivateChat, "" };
+
+		if (!botDatabase.IsOwner(message->from->id)) return { gmb::msg::log::notFromOwner, gmb::msg::chat::cannotUseCommand };
+
+		botWorking = false;
+
+		return { "", "the bot has stopped working" };
 	}
 
 	logging::OnEventResult BotController::OnMyChatMember(TgBot::ChatMemberUpdated::Ptr update)
@@ -738,18 +737,74 @@ Managing Bot Administrators
 
 			return { "bot became an " + status, "the bot became an " + status};
 		}
-		else if (isContains && (status == "left" || status == "kicked"))
+		else if (status == "left" || status == "kicked")
 		{
-			botDatabase.DeleteGroup(update->chat->id);
+			if(isContains)
+				botDatabase.DeleteGroup(update->chat->id);
 
 			return { "bot left group", "the bot left the group" };
 		}
 
-		return { gmb::msg::unknownBehavior, gmb::msg::unknownBehavior };
+		assert(false && gmb::msg::unknownBehavior.c_str());
+
+		return { gmb::msg::unknownBehavior + ": status: " + status + ", isContains: " + (isContains ? "true" : "false"), gmb::msg::unknownBehavior};
+	}
+	
+	void BotController::ProcessPendingUpdates()
+	{
+		gmb::logging::Log(gmb::logging::LogSource::Bot, gmb::logging::LogType::Event, "Start ProcessPendingUpdates");
+
+		int32_t offset{ 0 };
+		bool processingCompleted{ false };
+
+		int32_t numberMissedUpdates{ 0 };
+
+		for (size_t i = 0; i < gmb::consts::numberAttemptsExecuteProcessPendingUpdates && !processingCompleted; ++i)
+		{
+			SafeExecute(logging::LogSource::Bot, logging::LogType::Event, {}, [this, &processingCompleted, &offset, &numberMissedUpdates]() -> logging::OnEventResult
+				{
+					bool stop{ false };
+
+					while (!stop)
+					{
+						auto updates{ bot.getApi().getUpdates(offset) };
+
+						if (updates.empty())
+						{
+							stop = true;
+							break;
+						}
+
+						for (const auto& update : updates)
+						{
+							offset = update->updateId + 1;
+							
+							if (update->myChatMember)
+								SafeExecute(logging::LogSource::Bot, logging::LogType::Event, logging::ContextLog::ToContextLog(update->myChatMember, gmb::consts::event::botChatMemberUpdated), [this, &processingCompleted, update]()->logging::OnEventResult
+									{
+										return OnMyChatMember(update->myChatMember);
+									}, true);
+							++numberMissedUpdates;
+						}
+					}
+
+					if (offset > 0) bot.getApi().getUpdates(offset);
+
+					processingCompleted = true;
+
+					return {};
+				}, true);
+
+			if(!processingCompleted) std::this_thread::sleep_for(std::chrono::seconds(1));
+		}
+
+		gmb::logging::Log(gmb::logging::LogSource::Bot, gmb::logging::LogType::Event, processingCompleted ? "Finished ProcessPendingUpdates. Missed \"Updates\": " + std::to_string(numberMissedUpdates) : "ProcessPendingUpdates failed");
 	}
 
-	int64_t BotController::Fibonacci(const size_t numberOfNumber) const
+	int64_t BotController::Fibonacci(size_t numberOfNumber) const
 	{
+		if (numberOfNumber > 90) numberOfNumber = 90;
+
 		int64_t num = 1, previousNum = 1;
 
 		for (size_t i = 1; i < numberOfNumber; ++i)
@@ -766,6 +821,10 @@ Managing Bot Administrators
 
 	std::string BotController::RandomNumberGenerator(const size_t length)
 	{
+		thread_local std::random_device rd;
+		thread_local std::default_random_engine dre{ rd() };
+		std::uniform_int_distribution<int> uniform_dist{ '0', '9' };
+
 		std::string number;
 
 		for (size_t a = 0; a < length; ++a)
