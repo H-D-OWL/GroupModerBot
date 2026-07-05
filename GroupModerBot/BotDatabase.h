@@ -1,23 +1,33 @@
 ﻿#pragma once
 
 #include <cstdint> 
+#include <filesystem>
 #include <memory>
-#include <string>
-#include <string_view>
+#include <shared_mutex>
+#include <string> 
+#include <string_view> 
 #include <unordered_map>
 #include <vector>
 
 #include <tgbot/types/Chat.h> 
 
 #include <SQLiteCpp/Database.h> 
- 
+
 
 namespace gmb
 {
 
-	class BotDatabase
+	class BotDatabase final
 	{
 	public:
+
+		BotDatabase(const BotDatabase&) = delete;
+		BotDatabase& operator=(const BotDatabase&) = delete;
+		BotDatabase(BotDatabase&&) noexcept = delete;
+		BotDatabase& operator=(BotDatabase&&) noexcept = delete;
+
+		BotDatabase() = default;
+		~BotDatabase() = default;
 
 		struct Admin
 		{
@@ -34,7 +44,7 @@ namespace gmb
 			}
 		};
 
-		struct Group 
+		struct Group
 		{
 			int64_t id{};
 			std::string title{}, uniqueTitle{};
@@ -50,7 +60,7 @@ namespace gmb
 			}
 		};
 
-		struct GroupSettings 
+		struct GroupSettings
 		{
 			int64_t id{}, numWarnToMute{}, numWarnToBan{};
 
@@ -63,40 +73,41 @@ namespace gmb
 			}
 		};
 
-		static std::string InitStandardDB();
+		void Open(const std::filesystem::path& dbPath);
 
-		void Open(const std::string& pathToDatabase);
-		void CheckStructure() const;
-		void CacheLoad();
-
-		bool TableHasColumn(const std::string& tableName, const std::string_view columnName) const;
-		
-		const Admin* GetAdmin(const int64_t userId) const;
-		const std::unordered_map<int64_t, Admin>& GetAdmins() const;
+		std::shared_ptr<const Admin> GetAdmin(const int64_t userId) const;
+		std::unordered_map<int64_t, std::shared_ptr<const Admin>> GetAdmins() const;
 		bool IsAdmin(const int64_t userId) const;
 		bool IsOwner(const int64_t userId) const;
 		size_t GetNumberAdmins() const;
 		void AddAdmin(const Admin& user);
 		void UpdateAdmin(const Admin& admin);
-		void DeleteAdmin(const int64_t id);
+		void DeleteAdmin(const int64_t userId);
 
-		const Group* GetGroup(const int64_t id) const;
-		const std::unordered_map<int64_t, Group>& GetGroups() const;
+		std::shared_ptr<const Group> GetGroup(const int64_t groupId) const;
+		std::unordered_map <int64_t, std::shared_ptr<const Group>> GetGroups() const;
 		void AddGroup(const Group& group, const GroupSettings& groupSettings);
 		void UpdateGroup(const Group& group, const GroupSettings& groupSettings);
-		void DeleteGroup(const int64_t id);
+		void DeleteGroup(const int64_t groupId);
 
-		const GroupSettings* GetGroupSettings(const int64_t id) const;
-		const std::unordered_map<int64_t, GroupSettings>& GetGroupsSettings() const;
+		std::shared_ptr<const GroupSettings> GetGroupSettings(const int64_t groupId) const;
+		std::unordered_map<int64_t, std::shared_ptr<const GroupSettings>> GetGroupsSettings() const;
 
 		int64_t GroupIdFromUniqueTitle(const std::string& uniqueTitle) const;
 		bool IsBotActive(const int64_t groupId) const;
 
 		int64_t GetWarns(const int64_t userId, const int64_t groupId) const;
 		void SetWarns(const int64_t userId, const int64_t groupId, const int64_t warns);
-		void DeleteWarns(const int64_t userId, const int64_t groupId) const;
+		void DeleteWarns(const int64_t userId, const int64_t groupId);
 
 	private:
+
+		static void InitDatabase(const std::string& dbPath);
+
+		void CheckStructure() const;
+		void CacheLoad();
+
+		bool TableHasColumn(const std::string& tableName, const std::string_view columnName) const;
 
 		// Adds or updates data in the cache.
 		void UpsertCache(const Admin& admin);
@@ -117,12 +128,12 @@ namespace gmb
 
 		struct Cache
 		{
-			inline static std::unordered_map<int64_t, Admin> admins{};
+			std::unordered_map<int64_t, std::shared_ptr<const Admin>> admins{};
 
-			inline static std::unordered_map<int64_t, Group> groups{};
-			inline static std::unordered_map<std::string, int64_t> groupIdsByUniqueTitle{};
+			std::unordered_map<int64_t, std::shared_ptr<const Group>> groups{};
+			std::unordered_map<std::string, int64_t> groupIdsByUniqueTitle{};
 
-			inline static std::unordered_map<int64_t, GroupSettings> groupsSettings{};
+			std::unordered_map<int64_t, std::shared_ptr<const GroupSettings>> groupsSettings{};
 		};
 
 		struct TableName
@@ -194,5 +205,7 @@ namespace gmb
 		std::unique_ptr<SQLite::Database> botDatabase{};
 
 		Cache cache{};
+
+		mutable std::shared_mutex mutexDb;
 	};
 }
