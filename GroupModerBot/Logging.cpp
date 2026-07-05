@@ -1,14 +1,27 @@
 ﻿#include "Logging.h"
 
-#include <iostream>
-#include <string> 
-#include <string_view>
+#include <cassert>  
 #include <chrono> 
+#include <condition_variable> 
+#include <cstdio>  
+#include <ctime>
+#include <filesystem>
 #include <iomanip>
-#include <syncstream>
+#include <ios>
+#include <iostream>
+#include <mutex> 
+#include <shared_mutex> 
+#include <sstream>
+#include <string> 
+#include <string_view> 
+#include <system_error>
+#include <thread>
+#include <utility> 
+#include <format>
 
 #include <tgbot/types/ChatMemberUpdated.h> 
 #include <tgbot/types/Message.h> 
+#include <tgbot/types/Chat.h>
 
 namespace gmb
 {
@@ -18,7 +31,7 @@ namespace gmb
 		{
 			std::ostream& logStream{ std::clog };
 
-			constexpr std::string_view LogPrefixToText(const LogSource ls)
+			constexpr std::string_view LogPrefixToText(const LogSource ls) noexcept
 			{
 				switch (ls)
 				{
@@ -29,7 +42,7 @@ namespace gmb
 				}
 			}
 
-			constexpr std::string_view LogPrefixToText(const LogType lt)
+			constexpr std::string_view LogPrefixToText(const LogType lt) noexcept
 			{
 				switch (lt)
 				{
@@ -41,7 +54,7 @@ namespace gmb
 				}
 			}
 
-			std::string ChatTypeToText(const TgBot::Chat::Type type)
+			std::string ChatTypeToText(const TgBot::Chat::Type type) noexcept
 			{
 				switch (type)
 				{
@@ -53,25 +66,14 @@ namespace gmb
 				}
 			}
 
-			void PrintGeneralPartLog(std::ostream& stream, const LogSource ls, const LogType lt)
+			inline std::string GeneralPartLog(const LogSource ls, const LogType lt)
 			{
-				const std::chrono::system_clock::time_point now{ std::chrono::system_clock::now() };
-				const time_t time{ std::chrono::system_clock::to_time_t(now) };
-				tm nowTime{};
+				return std::format("{:%Y-%m-%d %H:%M:%S} {} {} ", std::chrono::floor<std::chrono::seconds>(std::chrono::utc_clock::now()), LogPrefixToText(ls), LogPrefixToText(lt));
+			}
 
-#if defined(_MSC_VER) // Windows
-				localtime_s(&nowTime, &time);
-#elif defined(__linux__) || defined(__APPLE__) || defined(__unix__) || defined(__posix) // Linux || macOS || POSIX		
-				localtime_r(&time, &nowTime);
-#else // Rest
-				tm* t{ std::localtime(&time) };
-
-				if (t)
-					nowTime = *t;
-#endif
-
-				stream << std::put_time(&nowTime, "%Y-%m-%d %H:%M:%S ")
-					<< LogPrefixToText(ls) << ' ' << LogPrefixToText(lt) << ' ';
+			inline std::string GetTimestamp()
+			{
+				return std::format("{:%Y-%m-%d_%H-%M-%S}", std::chrono::floor<std::chrono::seconds>(std::chrono::utc_clock::now()));
 			}
 		}
 
@@ -87,7 +89,9 @@ namespace gmb
 				.userId { (hasUser ? std::to_string(message->from->id) : "") },
 				.username { (hasUser ? message->from->username : "") },
 				.userTargetId { (hasUserTarget ? std::to_string(message->replyToMessage->from->id) : "") },
-				.userTargetname { (hasUserTarget ? message->replyToMessage->from->username : "") },
+				.userTargetName { (hasUserTarget ? message->replyToMessage->from->username : "") },
+				.userTargetFirstName { (hasUserTarget ? message->replyToMessage->from->firstName : "") },
+				.userTargetLastName { (hasUserTarget ? message->replyToMessage->from->lastName : "") },
 				.chatId { (hasChat ? std::to_string(message->chat->id) : "") },
 				.title { (hasChat ? message->chat->title : "") },
 				.chatType { (hasChat ? ChatTypeToText(message->chat->type) : "") },
@@ -112,38 +116,242 @@ namespace gmb
 			};
 		}
 
-		void Log(const LogSource ls, const LogType lt, const std::string_view logText)
+		LogMode ToLogMode(const std::string_view text) noexcept
 		{
-			std::osyncstream syncLogStream(logStream);
-
-			PrintGeneralPartLog(syncLogStream, ls, lt);
-			syncLogStream << logText << '\n';
+			if (text == "Console")
+			{
+				return LogMode::Console;
+			}
+			else if (text == "File")
+			{
+				return LogMode::File;
+			}
+			else if (text == "ConsoleAndFile")
+			{
+				return LogMode::ConsoleAndFile;
+			}
+			else if (text == "Not")
+			{
+				return LogMode::Not;
+			}
+			else
+			{
+				return LogMode::Error;
+			}
 		}
 
-		void Log(const LogSource ls, const LogType lt, const ContextLog& contextLog, const std::string_view logText)
-		{
-			std::osyncstream syncLogStream(logStream);
+		///
 
-			PrintGeneralPartLog(syncLogStream, ls, lt);
+		void Logger::Init(const LogMode logMode, const size_t maxFileSizeBytes, std::filesystem::path logDirectory)
+		{
+			Get().toConsole = logMode == LogMode::Console || logMode == LogMode::ConsoleAndFile;
+			Get().toFile = logMode == LogMode::File || logMode == LogMode::ConsoleAndFile;
+
+			Get().maxFileSizeBytes = maxFileSizeBytes;
+
+			Get().logDirectory = std::move(logDirectory);
+
+			Get().frontBuffer.reserve(100);
+			Get().backBuffer.reserve(100);
+
+			if (Get().toFile)
+			{
+				std::error_code ec;
+
+				std::filesystem::create_directories(Get().logDirectory, ec);
+
+				if (ec)
+				{
+					Get().toFile = false;
+
+					Get().LogInternal(LogSource::Program, LogType::Error, "failed to create a log directory. Logging to a file is disabled");
+				}
+				else
+					Get().OpenNewLogFile();
+			}
+
+			Get().run = true;
+
+			Get().loggerThread = std::thread([]() { Get().LoggingProcess(); });
+		}
+
+		void Logger::Deactivation()
+		{
+			const bool stopConsole{ Get().run == false || (Get().toConsole && !Get().toFile) };
+
+			if (stopConsole)
+				Get().LogInternal(gmb::logging::LogSource::Program, gmb::logging::LogType::Event, "Bot has stopped working. Press ENTER to close console");
+			else
+				Get().LogInternal(gmb::logging::LogSource::Program, gmb::logging::LogType::Event, "Bot has stopped working");
+
+			Get().run = false;
+
+			Get().cv.notify_one();
+
+			if (Get().loggerThread.joinable())
+				Get().loggerThread.join();
+			else
+			{
+				std::scoped_lock lock(Get().logMutex);
+
+				for (const std::string_view log : Get().frontBuffer)
+				{
+					logStream << log;
+				}
+
+				Get().frontBuffer.clear();
+			}
+
+			if (Get().toFile && Get().logFile.is_open())
+				Get().LogFileSwap(false);
+
+			if (stopConsole)
+				Get().StopConsole();
+		}
+
+		Logger::~Logger()
+		{
+			run = false;
+
+			cv.notify_one();
+
+			if (loggerThread.joinable())
+				loggerThread.join();
+			else
+			{
+				std::scoped_lock lock(logMutex);
+
+				for (const std::string_view log : frontBuffer)
+				{
+					logStream << log;
+				}
+			}
+
+			if (toFile && logFile.is_open()) LogFileSwap(false);
+		}
+
+		Logger& Logger::Get()
+		{
+			static Logger logger{};
+
+			return logger;
+		}
+
+		void Logger::OpenNewLogFile()
+		{
+			logFilePath = logDirectory / std::format("log_{}.txt", GetTimestamp());
+
+			logFile.open(logFilePath, std::ios::app);
+
+			if (!logFile.is_open())
+			{
+				toFile = false;
+
+				LogInternal(LogSource::Program, LogType::Error, "failed to create a log file. Logging to a file is disabled");
+			}
+
+			currentFileSizeBytes = 0;
+		}
+
+		void Logger::LogFileSwap(const bool newLogFile = true)
+		{
+			logFile.close(); 
+
+			std::filesystem::path newLogFileName{ logFilePath };
+			newLogFileName.replace_extension();
+			newLogFileName += "—";
+			newLogFileName += GetTimestamp();
+			newLogFileName += ".txt";
+
+			std::error_code ec;
+
+			std::filesystem::rename(logFilePath, newLogFileName, ec);
+
+			if (ec) 
+				LogInternal(LogSource::Program, LogType::Error, "failed to rename a log file");
+
+			if (newLogFile) OpenNewLogFile();
+		}
+
+		void Logger::LoggingProcess()
+		{
+			while (run || !frontBuffer.empty())
+			{
+				{
+					std::unique_lock lock(logMutex);
+
+					cv.wait_for(lock, std::chrono::milliseconds(500), [this]() -> bool {
+						return !frontBuffer.empty() || !run; });
+
+					frontBuffer.swap(backBuffer);
+				}
+
+				if (!backBuffer.empty())
+				{
+					for (const std::string_view log : backBuffer)
+					{
+						if (toConsole)
+						{
+							logStream << log;
+						}
+
+						if (toFile)
+						{
+							logFile << log;
+
+							currentFileSizeBytes += log.size();
+						}
+					}
+
+					if (toFile) logFile.flush();
+
+					backBuffer.clear();
+
+					if (toFile && currentFileSizeBytes >= maxFileSizeBytes) LogFileSwap();
+				}
+			}
+		}
+
+		void Logger::LogInternal(const LogSource ls, const LogType lt, const std::string_view logText)
+		{
+			std::string log{ GeneralPartLog(ls, lt) };
+			log += logText;
+			log += '\n';
+
+			std::scoped_lock lock(logMutex);
+
+			frontBuffer.emplace_back(std::move(log));
+
+			if (frontBuffer.size() >= 1000 || lt == LogType::FatalError || lt == LogType::Error)
+				cv.notify_one();
+		}
+
+		void Logger::LogInternal(const LogSource ls, const LogType lt, const ContextLog& contextLog, const std::string_view logText)
+		{
+			std::string log{ GeneralPartLog(ls, lt) };
 
 			const bool hasUser{ !contextLog.userId.empty() };
 			const bool hasUserTarget{ !contextLog.userTargetId.empty() };
 			const bool hasChat{ !contextLog.chatId.empty() };
 			const bool hasAction{ !contextLog.action.empty() };
 
-
-			if (hasUser || hasChat || hasAction)
+			if (hasUser || hasUserTarget || hasChat || hasAction)
 			{
-				syncLogStream << '[';
+				log += '[';
 
 				bool needSeparator{ false };
 
 				if (hasUser)
 				{
-					syncLogStream << "User: " << contextLog.userId;
-					
-					if(!contextLog.username.empty()) 
-						syncLogStream << " (" << contextLog.username << ')';
+					log += "User: ";
+					log += contextLog.userId;
+
+					if (!contextLog.username.empty())
+					{
+						log += " (";
+						log += contextLog.username;
+						log += ')';
+					}
 
 					needSeparator = true;
 				}
@@ -151,13 +359,18 @@ namespace gmb
 				if (hasUserTarget)
 				{
 					if (needSeparator)
-						syncLogStream << " | ";
+						log += " | ";
 
 
-					syncLogStream << "Target: " << contextLog.userTargetId;
+					log += "Target: ";
+					log += contextLog.userTargetId;
 
-					if (!contextLog.userTargetname.empty())
-						syncLogStream << " (" << contextLog.userTargetname << ')';
+					if (!contextLog.userTargetName.empty())
+					{
+						log += " (";
+						log += contextLog.userTargetName;
+						log += ')';
+					}
 
 					needSeparator = true;
 				}
@@ -165,34 +378,47 @@ namespace gmb
 				if (hasChat)
 				{
 					if (needSeparator)
-						syncLogStream << " | ";
+						log += " | ";
 
-					syncLogStream << contextLog.chatType;
+					log += contextLog.chatType;
 
 					if (contextLog.userId != contextLog.chatId)
 					{
-						syncLogStream << ": " << contextLog.chatId;
+						log += ": ";
+						log += contextLog.chatId;
 
 						if (!contextLog.title.empty())
-							syncLogStream << " (" << contextLog.title << ')';
+						{
+							log += " (";
+							log += contextLog.title;
+							log += ')';
+						}
 					}
 				}
 
 				if (hasAction)
 				{
 					if (needSeparator)
-						syncLogStream << " | ";
+						log += " | ";
 
-					syncLogStream << "Action: " << contextLog.action;
+					log += "Action: ";
+					log += contextLog.action;
 				}
 
-				syncLogStream << "] ";
+				log += "] ";
 			}
 
-			syncLogStream << logText << '\n';
+			log += logText;
+			log += '\n';
+
+			std::scoped_lock lock(logMutex);
+
+			frontBuffer.emplace_back(std::move(log));
+
+			if (frontBuffer.size() >= 1000) cv.notify_one();
 		}
 
-		void StopConsole()
+		void Logger::StopConsole()
 		{
 			std::cin.get();
 		}
