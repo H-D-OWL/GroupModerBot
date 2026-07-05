@@ -27,7 +27,7 @@ GroupModerBot is a reliable Telegram moderation bot designed to help you maintai
  *The following dependencies are not required for the pre-built binaries to run.*
 
 ### Build Tools
-* **Compiler** with **C++20** support (MSVC 19.30+, GCC 11+ and others)
+* **Compiler** with **C++20** support (MSVC 19.30+, GCC 13+ and others)
 * [CMake](https://github.com/kitware/cmake) v3.21+
 * [Ninja](https://github.com/ninja-build/ninja) v1.10.1
 * [vcpkg](https://github.com/microsoft/vcpkg/) 
@@ -48,6 +48,7 @@ GroupModerBot is a reliable Telegram moderation bot designed to help you maintai
 1. ⚖️ **Warning System** - Issue warnings to group members and set custom penalties. Includes an auto-mute feature where mute duration increases progressively using the Fibonacci sequence.
 2. 🛡️ **Fault Tolerance** - Exception handling ensures it stays online continuously unless the host runs out of memory or power.
 3. 🔒 **Persistent Storage** - All data (admins, warnings, group settings) is stored securely in an SQLite database. No data is lost upon restart or disconnection.
+4. 📃 **Logging** - The bot processes all commands entirely asynchronously, ensuring zero blocking under high load. It also features a highly customizable file logging system with automatic rotation and graceful shutdown capabilities.
 
 ## 🚀 Quick Start
 Follow these steps to launch the bot:
@@ -66,10 +67,9 @@ To function as a moderator, the bot needs specific permissions in BotFather:
   
 **3. Database setup**
 
-* The bot requires an SQLite database to function. You have two options:
-
-	* Automatic (Recommended): Simply skip this step. If the configuration file does not contain `DbPath=`, a file `GroupModerBotDatabase.db` containing the necessary structure will be automatically created in the folder with the binary file.
-	* Manual: If you wish to use a custom location or filename, create a `.db` file (you can use [DB Browser](https://sqlitebrowser.org) or [SQLiteStudio](https://sqlitestudio.pl) for this, for example). *The path to `.db` must not contain non-Latin letters.* Then create the necessary tables in this database:
+* The bot requires an SQLite database:
+	* Specify the absolute path to an existing database—or to the location where you wish to create one—in the `DbPath=` parameter. If the folders or the database file specified in the path do not exist, they will be created. The database will be initialized with the necessary structure.
+	* Tables required for the bot to function:
 
 <details>
  <summary>BotAdmins</summary>
@@ -133,23 +133,31 @@ CREATE TABLE "UsersWarnings" (
 
 **4. Configuration**
 * Open the `DataForBot.txt` file in the folder with the binary file.
-* Fill in your `BotToken`, (optionally) your `DbPath`, and (optionally) `EnableProcessPendingUpdates`:
+* Fill in your `DbPath`, `BotToken`, `EnableProcessPendingUpdates` (optional), `LogMode`, `MaxLogFileSize` (optional when `LogMode=Console`), and `LogDirectory` (optional when `LogMode=Console`):
 
 ```
-DbPath=C:\Users\UserName\Desktop\Database\DBForBot.db
-BotToken=1234567890:AAFJmnuH50H05MqFwJZrrpI2FTRGTFCWK68
-EnableProcessPendingUpdates=true
+DbPath=				C:\Users\UserName\Desktop\Database\DBForBot.db
+BotToken=			1234567890:AAFJmnuH50H05MqFwJZrrpI2FTRGTFCWK68
+EnableProcessPendingUpdates=	true
+LogMode= 			ConsoleAndFile
+MaxLogFileSize=			102400
+LogDirectory=			C:\Users\UserName\Desktop\logs
 ```
 
 * `EnableProcessPendingUpdates` - Enables or disables `ProcessPendingUpdates`. If `ProcessPendingUpdates` is enabled, the bot will ignore all commands and events sent to it while it was offline that are not directly related to the bot. 
 The bot will only process its own movements within groups and changes to its status within groups. `true`, `t`, and `1` are defined as **true**. `false`, `f`, and `0` are defined as **false**.
+* `LogMode` - Controls where logs are written. It has the following options: `Console` (log output to the console only), `File` (log output to a file only), or `ConsoleAndFile` (log output to both the console and a file).
+* `MaxLogFileSize` - Specifies the maximum size (in bytes) of a log file, after which a new log file is created.
+* `LogDirectory` - Specifies the absolute path to the folder where log files will be stored.
 
 * **IMPORTANT**:
-	* Line order does not matter, but ensure there are no spaces around the `=` sign.
+	* Line order does not matter. Spaces are allowed between the `=` sign and the value, as well as after the value.
 	* Any other text or empty lines in the file will be ignored.
-	* If you remove `DbPath=` , a `.db` file will be automatically created as described in step 3 (Automatic).
+	* The paths specified in `DbPath` and `LogDirectory` must be absolute.
+	* If the path specified in `DbPath` or `LogDirectory` does not exist, it will be created automatically.
 	* If you remove `EnableProcessPendingUpdates=`, `ProcessPendingUpdates` will be considered enabled.
-
+	* Log file names follow this structure: `log_<creation_date_time>—<closure_date_time>.txt` (e.g., `log_2026-07-03_14-57-26—2026-07-03_14-59-01.txt`).
+	
 **5. Run & Authenticate**
 * Run the `GroupModerBot` binary.
 * If everything is configured correctly, you will see a successful initialization log in the console, ending with `[BOT] [EVENT] bot: "NameBot" has been launched`.
@@ -176,7 +184,7 @@ The bot will reply: `you have become a bot owner`. You are now the owner of the 
 | `/set_group_unique_title <OldUniqueTitle> <NewUniqueTitle>` | 🔒 | 👑 | Change the `UniqueTitle` for a group |
 | `/admins` | 🔒 | 👑🛡️ |  List all bot administrators |
 | `/add_admin [AdminConfirmationCode]` | 🔒 | 👑👤 | 👑: Generate an AdminConfirmationCode. <br> 👤: Become the owner (if none exists) or an admin by entering the confirmation code |
-| `/remove_admin <AdminNumber>` | 🔒 | 👑 | Remove an admin using their index number from `/admins`. <br> *Always use `/admins` first to get the correct number.* |
+| `/remove_admin <AdminID>` | 🔒 | 👑 | Remove an administrator using their Telegram ID |
 | `/set_warn_mute_settings <QuantityWarnToMute>` | 🔒 | 👑🛡️ |Set the number of warnings after which a group member will be muted. Default: 3. <br> Mute duration (days) = Fibonacci(UserWarns−QuantityWarnToMute). <br> **Example:** If QuantityWarnToMute is 3 and the user receives the 7th warning, mute is Fibonacci(4) = 3 days |
 | `/set_warn_ban_settings <QuantityWarnToBan>` | 🔒 | 👑🛡️ | Set the number of warnings before banning a group member. Default: 5 |
 | `/bot_active` | 👥 | 👑 | Activates the bot. The bot begins executing commands in the group |
@@ -190,12 +198,8 @@ The bot will reply: `you have become a bot owner`. You are now the owner of the 
 **Parameters Reference:** 
 * **UniqueTitle:** A unique string (1-32 characters). Allowed: `A-z`, `0-9`, and underscore `_`.
 * **AdminConfirmationCode:** A unique 32-character numeric verification string.
-* **AdminNumber:** The specific index number retrieved from the `/admins` list.
+* **AdminID:** Unique Telegram ID. *You can find out using the* `/admins` *command.*
 * **QuantityWarns:** An integer. Warnings: cannot be negative.
-
-## 🕛 TODO
-* Full multithreading
-* Logging to a file
 
 ## 🤝 Contribution
 * Found a bug or have a suggestion? Feel free to open an [issue](../../issues).

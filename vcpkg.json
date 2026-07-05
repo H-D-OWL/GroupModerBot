@@ -1,0 +1,13 @@
+{
+  "name": "group-moder-bot",
+  "version": "1.2.0",
+  "dependencies": [
+    "taskflow",
+    "sqlitecpp",
+    "tgbot-cpp",
+    "boost-system",
+    "curl",
+    "zlib",
+    "openssl"
+  ]
+}
