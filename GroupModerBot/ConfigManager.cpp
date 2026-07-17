@@ -62,13 +62,17 @@ namespace gmb
 		std::string fileLine{};
 		bool logToFile{ false };
 
+		std::string_view valuesEnableProcessPendingUpdatesKeyLine{};
+		std::string logModeLine{};
+		std::string maxFileSizeBytesLine{};
+
 		while (std::getline(fileDataForBot, fileLine))
 		{
 			std::erase(fileLine, '\r');
 
 			if (fileLine.empty()) continue;
 
-			std::string_view lineView = fileLine;
+			const std::string_view lineView = fileLine;
 
 			if (lineView.starts_with(dbPathKey))
 			{
@@ -80,26 +84,30 @@ namespace gmb
 			}
 			else if (lineView.starts_with(enableProcessPendingUpdatesKey))
 			{
-				const auto it = valuesEnableProcessPendingUpdatesKey.find(TrimEdges(lineView.substr(enableProcessPendingUpdatesKey.size())));
+				valuesEnableProcessPendingUpdatesKeyLine = TrimEdges(lineView.substr(enableProcessPendingUpdatesKey.size()));
+
+				const auto it = valuesEnableProcessPendingUpdatesKey.find(valuesEnableProcessPendingUpdatesKeyLine);
 
 				if (it == valuesEnableProcessPendingUpdatesKey.cend())
-					throw std::runtime_error{ "value EnableProcessPendingUpdatesKey is invalid" };
+					throw std::runtime_error{ std::format("value EnableProcessPendingUpdatesKey is invalid (\"{}\")", valuesEnableProcessPendingUpdatesKeyLine) };
 
 				enableProcessPendingUpdates = it->second;
 			}
 			else if (lineView.starts_with(logModeKey))
 			{
-				logMode = gmb::logging::ToLogMode(TrimEdges(lineView.substr(logModeKey.size())));
+				logModeLine = TrimEdges(lineView.substr(logModeKey.size()));
+
+				logMode = gmb::logging::ToLogMode(logModeLine);
 
 				logToFile = logMode == gmb::logging::LogMode::File || logMode == gmb::logging::LogMode::ConsoleAndFile;
 			}
 			else if (lineView.starts_with(maxLogFileSizeKey))
 			{
-				const std::string_view line = TrimEdges(lineView.substr(maxLogFileSizeKey.size()));
+				maxFileSizeBytesLine = TrimEdges(lineView.substr(maxLogFileSizeKey.size()));
 
-				std::from_chars_result res = std::from_chars(line.data(), line.data() + line.size(), maxFileSizeBytes);
+				std::from_chars_result res = std::from_chars(maxFileSizeBytesLine.data(), maxFileSizeBytesLine.data() + maxFileSizeBytesLine.size(), maxFileSizeBytes);
 
-				if (res.ec == std::errc::invalid_argument || res.ec == std::errc::result_out_of_range || res.ptr != line.data() + line.size())
+				if (res.ec == std::errc::invalid_argument || res.ec == std::errc::result_out_of_range || res.ptr != maxFileSizeBytesLine.data() + maxFileSizeBytesLine.size())
 					maxFileSizeBytes = static_cast<size_t>(0);
 			}
 			else if (lineView.starts_with(logDirectoryKey))
@@ -113,19 +121,19 @@ namespace gmb
 		//
 
 		if (!DbPathValid(dbPath))
-			throw std::runtime_error{ "value DbPath is invalid" };
+			throw std::runtime_error{ std::format("value DbPath is invalid (\"{}\")", dbPath.string()) };
 
 		if (botToken.empty())
-			throw std::runtime_error{ "value BotToken is invalid" };
+			throw std::runtime_error{ std::format("value BotToken is invalid (\"{}\")", botToken) };
 
 		if (logMode == gmb::logging::LogMode::Error)
-			throw std::runtime_error{ "value LogMode is invalid" };
+			throw std::runtime_error{ std::format("value LogMode is invalid (\"{}\")", logModeLine)};
 
 		if (logToFile && maxFileSizeBytes == 0)
-			throw std::runtime_error{ "value MaxLogFileSize is invalid" };
+			throw std::runtime_error{ std::format("value MaxLogFileSize is invalid (\"{}\")", maxFileSizeBytesLine) };
 
 		if (logToFile && (logDirectory.empty() || logDirectory.is_relative()))
-			throw std::runtime_error{ "value LogDirectory is invalid" };
+			throw std::runtime_error{ std::format("value LogDirectory is invalid (\"{}\")", logDirectory.string()) };
 	}
 
 	const std::filesystem::path& ConfigManager::GetDbPath() const noexcept

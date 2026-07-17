@@ -169,6 +169,112 @@ The bot will only process its own movements within groups and changes to its sta
 
 The bot will reply: `you have become a bot owner`. You are now the owner of the bot and have full access to its functionality!
 
+## 🛠 Building
+
+<details>
+ <summary>Windows</summary>
+
+* The following commands are designed for the **cmd** (Command Prompt).
+
+### **1. Installing basic tools**
+* Install [Git](https://git-scm.com/install/windows) and [CMake](https://cmake.org/download/) (During CMake installation, make sure to select "**Add CMake to the system PATH for all users**").
+
+* Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/ru/downloads/) (Select and install the "**Desktop development with C++**" workload in the installer).
+
+### **2. Installing vcpkg**
+* *It is recommended to install vcpkg in the root directory (e.g., `C:\vcpkg`) to avoid Windows path length limit errors during the build process.*
+
+```cmd
+cd C:\
+git clone https://github.com/microsoft/vcpkg.git
+
+cd vcpkg
+.\bootstrap-vcpkg.bat
+```
+
+### **3. Building GroupModerBot**
+ * `cmake` *commands can take quite a long time to execute.*
+
+```cmd
+cd %USERPROFILE%\Desktop
+git clone https://github.com/H-D-OWL/GroupModerBot.git
+cd GroupModerBot
+
+mkdir build
+cd build
+
+cmake .. -DCMAKE_TOOLCHAIN_FILE="C:\vcpkg\scripts\buildsystems\vcpkg.cmake" -DCMAKE_BUILD_TYPE=Release
+cmake --build . --config Release
+
+cd Release
+```
+
+### **4. Setup**
+* After the build is complete, an empty `DataForBot.txt` file will be generated alongside `GroupModerBot.exe` and the necessary `.dll` files. Open it via your file explorer or by running the following command to fill in your data (See **Quick Start** -> **4. Configuration**):
+
+```cmd
+notepad DataForBot.txt
+```
+
+### **5. Launch**
+* Now run the executable file, either through file explorer or by running the follow command and following the instructions in the **Run & Authenticate** section (**See Quick Start** -> **5. Run & Authenticate**).
+
+```cmd
+.\GroupModerBot.exe
+```
+</details>
+
+<details>
+ <summary>Linux</summary>
+
+ ### **1. Installing basic tools**
+```bash
+sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+sudo apt update
+sudo apt install git cmake build-essential curl zip unzip tar pkg-config gcc-13 g++-13 -y
+```
+
+### **2. Installing vcpkg**
+```bash
+cd ~
+git clone https://github.com/microsoft/vcpkg.git
+
+cd vcpkg
+./bootstrap-vcpkg.sh
+```
+
+### **3. Building GroupModerBot**
+ * `cmake` *commands can take quite a long time to execute.*
+
+```bash
+cd ~
+git clone https://github.com/H-D-OWL/GroupModerBot.git
+cd GroupModerBot
+
+mkdir build
+cd build
+
+export CC=gcc-13
+export CXX=g++-13
+
+cmake .. -DCMAKE_TOOLCHAIN_FILE="$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake" -DCMAKE_BUILD_TYPE=Release
+cmake --build .
+```
+
+### **4. Setup**
+* After the build is complete, an empty `DataForBot.txt` file will be created, along with the `GroupModerBot` executable. Run the following command to populate your data (see **Quick Start** -> **4. Configuration**):
+
+```bash
+nano DataForBot.txt
+```
+
+### **5. Launch**
+* Now run the executable file by running the following command and follow the instructions in the **Run & Authenticate** section (**See Quick Start** -> **5. Run & Authenticate**).
+```bash
+./GroupModerBot
+```
+</details>
+
 ## ⌨️ Usage
 
 ### Bot Commands
@@ -185,8 +291,8 @@ The bot will reply: `you have become a bot owner`. You are now the owner of the 
 | `/admins` | 🔒 | 👑🛡️ |  List all bot administrators |
 | `/add_admin [AdminConfirmationCode]` | 🔒 | 👑👤 | 👑: Generate an AdminConfirmationCode. <br> 👤: Become the owner (if none exists) or an admin by entering the confirmation code |
 | `/remove_admin <AdminID>` | 🔒 | 👑 | Remove an administrator using their Telegram ID |
-| `/set_warn_mute_settings <QuantityWarnToMute>` | 🔒 | 👑🛡️ |Set the number of warnings after which a group member will be muted. Default: 3. <br> Mute duration (days) = Fibonacci(UserWarns−QuantityWarnToMute). <br> **Example:** If QuantityWarnToMute is 3 and the user receives the 7th warning, mute is Fibonacci(4) = 3 days |
-| `/set_warn_ban_settings <QuantityWarnToBan>` | 🔒 | 👑🛡️ | Set the number of warnings before banning a group member. Default: 5 |
+| `/set_warn_mute_settings <UniqueTitle> <QuantityWarnToMute>` | 🔒 | 👑🛡️ |Set the number of warnings after which a group member will be muted. Default: 3. <br> Mute duration (days) = Fibonacci(UserWarns−QuantityWarnToMute). <br> **Example:** If QuantityWarnToMute is 3 and the user receives the 7th warning, mute is Fibonacci(4) = 3 days |
+| `/set_warn_ban_settings <UniqueTitle> <QuantityWarnToBan>` | 🔒 | 👑🛡️ | Set the number of warnings before banning a group member. Default: 5 |
 | `/bot_active` | 👥 | 👑 | Activates the bot. The bot begins executing commands in the group |
 | `/bot_deactive` | 👥 | 👑 | Deactivate the bot. The bot stops executing commands in the group |
 | `/add_warn [QuantityWarns]` | 👥 | 👑🛡️ | Add the specified number of warnings to a member. Default: 1. <br> *Must be used as a reply to a user's message* |
