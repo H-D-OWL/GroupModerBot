@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.21)
 project(GroupModerBot LANGUAGES CXX)
 
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    message(STATUS "Setting build type to 'Release' as none was specified.")
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
+endif()
+
 if(NOT DEFINED ENV{VCPKG_ROOT_CUSTOM})
     message(STATUS "VCPKG_ROOT_CUSTOM is not set")
 else()
@@ -102,19 +107,51 @@ endif()
 # CONFIGURATION FILE COPY (OPTIONAL)
 # ---------------------------------------------------------
 
+target_compile_definitions(${PROJECT_NAME} PRIVATE 
+    $<$<CONFIG:Debug>:IS_DEBUG_BUILD>
+    $<$<CONFIG:Release>:IS_RELEASE_BUILD>
+)
+
 set(CONFIG_FILE_NAME "DataForBot.txt")
-set(CONFIG_FILE "${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}/${CONFIG_FILE_NAME}")
-set(CONFIG_BUILD_FILE "${CMAKE_CURRENT_BINARY_DIR}/${CONFIG_FILE_NAME}")
 
-if(EXISTS ${CONFIG_FILE})
-    add_custom_command(
-        OUTPUT "${CONFIG_BUILD_FILE}"
-        COMMAND ${CMAKE_COMMAND} -E copy "${CONFIG_FILE}" "${CONFIG_BUILD_FILE}"
-    )
+# Debug source file (path to your finished file in the repository)
+set(CONFIG_SOURCE_DEBUG "${CMAKE_CURRENT_SOURCE_DIR}/${CONFIG_FILE_NAME}")
 
-    target_sources("${PROJECT_NAME}" PRIVATE "${CONFIG_BUILD_FILE}")
+# Blank release template text
+set(CONFIG_CONTENT_RELEASE 
+"DbPath=						
+BotToken=						
+EnableProcessPendingUpdates=	true
+LogMode=                        ConsoleAndFile
+MaxLogFileSize=					
+LogDirectory=					"
+)
 
-    message(STATUS "${CONFIG_FILE_NAME} found. It will be copied to the build directory.")
+# Universal path to a binary file 
+set(CONFIG_TARGET_PATH "$<TARGET_FILE_DIR:${PROJECT_NAME}>/${CONFIG_FILE_NAME}")
+
+# The presence of CONFIG_SOURCE_DEBUG is checked
+if(EXISTS "${CONFIG_SOURCE_DEBUG}")
+    set(DEBUG_FILE_EXISTS "1")
 else()
-    message(STATUS "${CONFIG_FILE_NAME} not found. Skipping copy step.")
+    set(DEBUG_FILE_EXISTS "0")
+endif()
+
+message(STATUS "DEBUG_FILE_EXISTS   = ${DEBUG_FILE_EXISTS}")
+message(STATUS "CONFIG_TARGET_PATH  = ${CONFIG_TARGET_PATH}")
+
+# RELEASE: Generating an empty template from a string
+file(GENERATE 
+     OUTPUT "${CONFIG_TARGET_PATH}"
+     CONTENT "${CONFIG_CONTENT_RELEASE}"
+     CONDITION "$<CONFIG:Release>"
+)
+
+# DEBUG: Copies physical file if it exists
+if(DEBUG_FILE_EXISTS)
+    file(GENERATE 
+         OUTPUT "${CONFIG_TARGET_PATH}"
+         INPUT "${CONFIG_SOURCE_DEBUG}"
+         CONDITION "$<CONFIG:Debug>"
+    )
 endif()

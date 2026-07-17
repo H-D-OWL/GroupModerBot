@@ -73,7 +73,7 @@ namespace gmb
 
 		//Adds a command to the Telegram UI and a command handler.
 		template<typename Func>
-		void AddBotCommand(std::string commandName, const Func func) noexcept
+		void AddBotCommand(std::string commandName, const Func func)
 		{
 			bot.getEvents().onCommand(commandName,
 				[this, commandName, func](TgBot::Message::Ptr message)
@@ -129,7 +129,7 @@ namespace gmb
 		{
 			const auto SafelySendMessage = [this, isLoggingOnly](const std::string& id, const std::string& textMessage) noexcept
 				{
-					if (!isLoggingOnly)
+					if (!isLoggingOnly && botWorking)
 						try
 					{
 						TgBot::LinkPreviewOptions::Ptr linkPreviewOptions{ std::make_shared<TgBot::LinkPreviewOptions>() };
@@ -199,7 +199,7 @@ namespace gmb
 
 		int64_t Fibonacci(size_t sequenceNumber) const noexcept;
 
-		//Generates a std::string of random characters from 0 to 9 of the specified length.
+		//Generates a string of random characters from 0 to 9 of the specified length.
 		std::string RandomNumberGenerator(const size_t length);
 
 		std::string confirmationCode{ gmb::consts::invalidTextData };

@@ -776,6 +776,8 @@ Managing Bot Administrators
 
 		botWorking.store(false);
 
+		botController->botWorking.notify_all();
+
 		return { "", "the bot has stopped working" };
 	}
 
@@ -979,6 +981,8 @@ Managing Bot Administrators
 
 			botController->botWorking.store(false);
 
+			botController->botWorking.notify_all();
+
 			static constexpr int64_t durationDelayBeforeAppClosure{ 5 };
 
 			std::this_thread::sleep_for(std::chrono::seconds(durationDelayBeforeAppClosure));
@@ -994,6 +998,8 @@ Managing Bot Administrators
 		if (botController && (signum == SIGINT || signum == SIGTERM || signum == SIGQUIT))
 		{
 			botController->botWorking.store(false);
+
+			botController->botWorking.notify_all();
 		}
 	}
 #endif
