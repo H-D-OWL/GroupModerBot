@@ -1,8 +1,8 @@
 # GroupModerBot
 
 <p align="left">
-  <a href="https://github.com/H-D-OWL/GroupModerBot/releases/latest"><img src="https://img.shields.io/github/v/release/H-D-OWL/GroupModerBot?style=flat-square&color=2ea44f"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/H-D-OWL/GroupModerBot?style=flat-square&color=blue&v=1"></a>
+  <a href="https://github.com/TiptevDmitry/GroupModerBot/releases/latest"><img src="https://img.shields.io/github/v/release/TiptevDmitry/GroupModerBot?style=flat-square&color=2ea44f"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/TiptevDmitry/GroupModerBot?style=flat-square&color=blue&v=1"></a>
   <br>
   <img src="https://img.shields.io/badge/Platform-Linux-Fee600?style=flat-square&logo=linux&logoColor=white">
   <img src="https://img.shields.io/badge/Platform-Windows_x64-0078D6?style=flat-square&logo=windows&logoColor=white">
@@ -95,7 +95,6 @@ CREATE TABLE "BotAdmins" (
 CREATE TABLE "Groups" (
 	"Id"	INTEGER NOT NULL UNIQUE,
 	"Title"	TEXT NOT NULL,
-	"UniqueTitle"	TEXT NOT NULL UNIQUE,
 	"Type"	INTEGER NOT NULL CHECK("Type" >= 0 AND "Type" <= 3),
 	"IsBotAdmin"	INTEGER NOT NULL CHECK("IsBotAdmin" = 0 OR "IsBotAdmin" = 1),
 	"IsBotActive"	INTEGER NOT NULL CHECK("IsBotActive" = 0 OR "IsBotActive" = 1),
@@ -156,7 +155,7 @@ The bot will only process its own movements within groups and changes to its sta
 	* The paths specified in `DbPath` and `LogDirectory` must be absolute.
 	* If the path specified in `DbPath` or `LogDirectory` does not exist, it will be created automatically.
 	* If you remove `EnableProcessPendingUpdates=`, `ProcessPendingUpdates` will be considered enabled.
-	* Log file names follow this structure: `log_<creation_date_time>—<closure_date_time>.txt` (e.g., `log_2026-07-03_14-57-26—2026-07-03_14-59-01.txt`).
+	* Log file names follow this structure: `log_<creation_date_time>__<closure_date_time>.txt` (e.g., `log_2026-07-03_14-57-26__2026-07-03_14-59-01.txt`).
 	
 **5. Run & Authenticate**
 * Run the `GroupModerBot` binary.
@@ -193,13 +192,30 @@ cd vcpkg
 ```
 
 ### **3. Building GroupModerBot**
- * `cmake` *commands can take quite a long time to execute.*
+* If you need the latest version from the `main` branch:
 
 ```cmd
 cd %USERPROFILE%\Desktop
-git clone https://github.com/H-D-OWL/GroupModerBot.git
+git clone https://github.com/TiptevDmitry/GroupModerBot
+cd GroupModerBot
+```
+
+<details>
+ <summary>If you want a specific commit from any branch</summary>
+
+```cmd
+cd %USERPROFILE%\Desktop
+git clone -n https://github.com/TiptevDmitry/GroupModerBot
 cd GroupModerBot
 
+git checkout <commit ID>
+```
+
+</details>
+
+* `cmake` *commands can take quite a long time to execute.*
+
+```cmd
 mkdir build
 cd build
 
@@ -244,13 +260,30 @@ cd vcpkg
 ```
 
 ### **3. Building GroupModerBot**
- * `cmake` *commands can take quite a long time to execute.*
+* If you need the latest version from the `main` branch:
 
 ```bash
 cd ~
-git clone https://github.com/H-D-OWL/GroupModerBot.git
+git clone https://github.com/TiptevDmitry/GroupModerBot
+cd GroupModerBot
+```
+
+<details>
+ <summary>If you want a specific commit from any branch</summary>
+
+```bash
+cd ~
+git clone -n https://github.com/TiptevDmitry/GroupModerBot
 cd GroupModerBot
 
+git checkout <commit ID>
+```
+
+</details>
+
+* `cmake` *commands can take quite a long time to execute.*
+
+```bash
 mkdir build
 cd build
 
@@ -287,12 +320,12 @@ nano DataForBot.txt
 | :--- | :--- | :--- | :--- |
 | `/start` | 🔒 | 👑🛡️👤 | Show available commands |
 | `/groups` | 🔒 | 👑🛡️ | List all groups containing the bot |
-| `/set_group_unique_title <OldUniqueTitle> <NewUniqueTitle>` | 🔒 | 👑 | Change the `UniqueTitle` for a group |
+| `/view_group_id` | 👥 | 👑🛡️ | View the group ID |
 | `/admins` | 🔒 | 👑🛡️ |  List all bot administrators |
 | `/add_admin [AdminConfirmationCode]` | 🔒 | 👑👤 | 👑: Generate an AdminConfirmationCode. <br> 👤: Become the owner (if none exists) or an admin by entering the confirmation code |
 | `/remove_admin <AdminID>` | 🔒 | 👑 | Remove an administrator using their Telegram ID |
-| `/set_warn_mute_settings <UniqueTitle> <QuantityWarnToMute>` | 🔒 | 👑🛡️ |Set the number of warnings after which a group member will be muted. Default: 3. <br> Mute duration (days) = Fibonacci(UserWarns−QuantityWarnToMute). <br> **Example:** If QuantityWarnToMute is 3 and the user receives the 7th warning, mute is Fibonacci(4) = 3 days |
-| `/set_warn_ban_settings <UniqueTitle> <QuantityWarnToBan>` | 🔒 | 👑🛡️ | Set the number of warnings before banning a group member. Default: 5 |
+| `/set_warn_mute_settings <GroupID> <QuantityWarnToMute>` | 🔒 | 👑🛡️ |Set the number of warnings after which a group member will be muted. Default: 3. <br> Mute duration (days) = Fibonacci(UserWarns−QuantityWarnToMute). <br> **Example:** If QuantityWarnToMute is 3 and the user receives the 7th warning, mute is Fibonacci(4) = 3 days |
+| `/set_warn_ban_settings <GroupID> <QuantityWarnToBan>` | 🔒 | 👑🛡️ | Set the number of warnings before banning a group member. Default: 5 |
 | `/bot_active` | 👥 | 👑 | Activates the bot. The bot begins executing commands in the group |
 | `/bot_deactive` | 👥 | 👑 | Deactivate the bot. The bot stops executing commands in the group |
 | `/add_warn [QuantityWarns]` | 👥 | 👑🛡️ | Add the specified number of warnings to a member. Default: 1. <br> *Must be used as a reply to a user's message* |
@@ -302,7 +335,7 @@ nano DataForBot.txt
 | `/disable_bot` | 🔒 | 👑 | Turn off the bot completely |
 
 **Parameters Reference:** 
-* **UniqueTitle:** A unique string (1-32 characters). Allowed: `A-z`, `0-9`, and underscore `_`.
+* **GroupID:** Unique Telegram Group ID.
 * **AdminConfirmationCode:** A unique 32-character numeric verification string.
 * **AdminID:** Unique Telegram ID. *You can find out using the* `/admins` *command.*
 * **QuantityWarns:** An integer. Warnings: cannot be negative.

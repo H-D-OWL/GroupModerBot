@@ -229,9 +229,6 @@ namespace gmb
 		if (cache.groups.contains(group.id))
 			throw SQLite::Exception(std::format("group \"{}\" already exists", group.title));
 
-		if (cache.groupIdsByUniqueTitle.contains(group.uniqueTitle))
-			throw SQLite::Exception(std::format("group with unique title \"{}\" already exists", group.uniqueTitle));
-
 		SQLite::Transaction transaction(*botDatabase);
 
 		SQLite::Statement insertGroup{ *botDatabase,
@@ -245,10 +242,9 @@ namespace gmb
 
 		insertGroup.bind(1, group.id);
 		insertGroup.bind(2, group.title);
-		insertGroup.bind(3, group.uniqueTitle);
-		insertGroup.bind(4, static_cast<int64_t>(group.type));
-		insertGroup.bind(5, static_cast<int64_t>(group.isBotAdmin));
-		insertGroup.bind(6, static_cast<int64_t>(group.isBotActive));
+		insertGroup.bind(3, static_cast<int64_t>(group.type));
+		insertGroup.bind(4, static_cast<int64_t>(group.isBotAdmin));
+		insertGroup.bind(5, static_cast<int64_t>(group.isBotActive));
 
 		insertGroup.exec();
 
@@ -281,13 +277,7 @@ namespace gmb
 		assert(group.id == groupSettings.id && "group and groupSettings have different id");
 
 		if (!cache.groups.contains(group.id))
-			throw SQLite::Exception(std::format("group \"{}\" does not exist", group.uniqueTitle));
-
-		if (!cache.groupIdsByUniqueTitle.contains(cache.groups.at(group.id)->uniqueTitle))
-			throw SQLite::Exception(std::format("unique title \"{}\" does not exist", group.uniqueTitle));
-
-		if (const auto it = cache.groupIdsByUniqueTitle.find(group.uniqueTitle); it != cache.groupIdsByUniqueTitle.end() && it->second != group.id)
-			throw SQLite::Exception(std::format("group with unique title \"{}\" already exists", group.uniqueTitle));
+			throw SQLite::Exception(std::format("group with ID = \"{}\" does not exist", group.id));
 
 		const bool groupHasChanged = *cache.groups.at(group.id) != group;
 		const bool groupsSettingsHasChanged = *cache.groupsSettings.at(groupSettings.id) != groupSettings;
@@ -307,12 +297,11 @@ namespace gmb
 
 			updateGroup.bind(1, group.id);
 			updateGroup.bind(2, group.title);
-			updateGroup.bind(3, group.uniqueTitle);
-			updateGroup.bind(4, static_cast<int64_t>(group.type));
-			updateGroup.bind(5, static_cast<int64_t>(group.isBotAdmin));
-			updateGroup.bind(6, static_cast<int64_t>(group.isBotActive));
+			updateGroup.bind(3, static_cast<int64_t>(group.type));
+			updateGroup.bind(4, static_cast<int64_t>(group.isBotAdmin));
+			updateGroup.bind(5, static_cast<int64_t>(group.isBotActive));
 
-			updateGroup.bind(7, group.id);
+			updateGroup.bind(6, group.id);
 
 			updateGroup.exec();
 		}
@@ -389,22 +378,6 @@ namespace gmb
 	}
 
 	///
-
-	int64_t BotDatabase::GroupIdFromUniqueTitle(const std::string& uniqueTitle) const
-	{
-		std::shared_lock lock(mutexDb);
-
-		const auto it = cache.groupIdsByUniqueTitle.find(uniqueTitle);
-
-		if (it != cache.groupIdsByUniqueTitle.end())
-		{
-			return it->second;
-		}
-		else
-		{
-			return 0;
-		}
-	}
 
 	bool BotDatabase::IsBotActive(const int64_t groupId) const
 	{
@@ -503,10 +476,10 @@ namespace gmb
 		SQLite::Database db(dbPath, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
 
 		const std::unordered_map<std::string_view, const std::string> queries{
-			{"BotAdmins", R"(CREATE TABLE "BotAdmins" ("Id"	INTEGER NOT NULL UNIQUE,"FirstName"	TEXT NOT NULL,"LastName"	TEXT NOT NULL,"Username"	TEXT NOT NULL,"IsBot"	INTEGER NOT NULL,"IsPremium"	INTEGER NOT NULL,"IsBotOwner"	INTEGER NOT NULL,PRIMARY KEY("Id")))"},
-			{"Groups", R"(CREATE TABLE "Groups" ("Id"	INTEGER NOT NULL UNIQUE,"Title"	TEXT NOT NULL,"UniqueTitle"	TEXT NOT NULL UNIQUE,"Type"	INTEGER NOT NULL CHECK("Type" >= 0 AND "Type" <= 3),"IsBotAdmin"	INTEGER NOT NULL CHECK("IsBotAdmin" = 0 OR "IsBotAdmin" = 1),"IsBotActive"	INTEGER NOT NULL CHECK("IsBotActive" = 0 OR "IsBotActive" = 1),PRIMARY KEY("Id")))"},
-			{"GroupsSettings", R"(CREATE TABLE "GroupsSettings" ("Id"	INTEGER NOT NULL UNIQUE,"NumWarnToMute"	INTEGER NOT NULL CHECK("NumWarnToMute" >= 0),"NumWarnToBan"	INTEGER NOT NULL CHECK("NumWarnToBan" >= 0),FOREIGN KEY("Id") REFERENCES "Groups"("Id") ON DELETE CASCADE))"},
-			{"UsersWarnings", R"(CREATE TABLE "UsersWarnings" ("Id"	INTEGER NOT NULL,"GroupId"	INTEGER NOT NULL,"QuantityWarn"	INTEGER NOT NULL CHECK("QuantityWarn" >= 0),PRIMARY KEY("Id","GroupId"),FOREIGN KEY("GroupId") REFERENCES "Groups"("Id") ON DELETE CASCADE))"}
+			  {"BotAdmins", R"(CREATE TABLE "BotAdmins" ("Id" INTEGER NOT NULL UNIQUE,"FirstName" TEXT NOT NULL,"LastName" TEXT NOT NULL,"Username" TEXT NOT NULL,"IsBot" INTEGER NOT NULL,"IsPremium" INTEGER NOT NULL,"IsBotOwner" INTEGER NOT NULL,PRIMARY KEY("Id")))"},
+			  {"Groups", R"(CREATE TABLE "Groups" ("Id" INTEGER NOT NULL UNIQUE,"Title" TEXT NOT NULL,"Type" INTEGER NOT NULL CHECK("Type" >= 0 AND "Type" <= 3),"IsBotAdmin" INTEGER NOT NULL CHECK("IsBotAdmin" = 0 OR "IsBotAdmin" = 1),"IsBotActive" INTEGER NOT NULL CHECK("IsBotActive" = 0 OR "IsBotActive" = 1),PRIMARY KEY("Id")))"},
+			  {"GroupsSettings", R"(CREATE TABLE "GroupsSettings" ("Id" INTEGER NOT NULL UNIQUE,"NumWarnToMute" INTEGER NOT NULL CHECK("NumWarnToMute" >= 0),"NumWarnToBan" INTEGER NOT NULL CHECK("NumWarnToBan" >= 0),FOREIGN KEY("Id") REFERENCES "Groups"("Id") ON DELETE CASCADE))"},
+			  {"UsersWarnings", R"(CREATE TABLE "UsersWarnings" ("Id" INTEGER NOT NULL,"GroupId" INTEGER NOT NULL,"QuantityWarn" INTEGER NOT NULL CHECK("QuantityWarn" >= 0),PRIMARY KEY("Id","GroupId"),FOREIGN KEY("GroupId") REFERENCES "Groups"("Id") ON DELETE CASCADE))"}
 		};
 
 		SQLite::Transaction transaction(db);
@@ -583,10 +556,9 @@ namespace gmb
 			UpsertCache(Group{
 			getGroups.getColumn(0).getInt64(),
 			getGroups.getColumn(1).getString(),
-			getGroups.getColumn(2).getString(),
-			static_cast<TgBot::Chat::Type>(getGroups.getColumn(3).getInt64()),
+			static_cast<TgBot::Chat::Type>(getGroups.getColumn(2).getInt64()),
+			static_cast<bool>(getGroups.getColumn(3).getInt64()),
 			static_cast<bool>(getGroups.getColumn(4).getInt64()),
-			static_cast<bool>(getGroups.getColumn(5).getInt64()),
 				});
 		}
 
@@ -629,24 +601,6 @@ namespace gmb
 
 	void BotDatabase::UpsertCache(const Group& group)
 	{
-		auto it = cache.groups.find(group.id);
-
-		if (it != cache.groups.end())
-		{
-			if (it->second->uniqueTitle != group.uniqueTitle)
-			{
-				[[maybe_unused]] const bool eraseUniqueTitle = cache.groupIdsByUniqueTitle.erase(it->second->uniqueTitle);
-
-				cache.groupIdsByUniqueTitle[group.uniqueTitle] = group.id;
-
-				assert(eraseUniqueTitle && "Cache desync");
-			}
-		}
-		else
-		{
-			cache.groupIdsByUniqueTitle[group.uniqueTitle] = group.id;
-		}
-
 		cache.groups[group.id] = std::make_shared<const Group>(group);
 	}
 
@@ -664,11 +618,10 @@ namespace gmb
 
 	void BotDatabase::DeleteGroupFromCache(const int64_t id)
 	{
-		[[maybe_unused]] const bool eraseGroupIdsByUniqueTitle = cache.groupIdsByUniqueTitle.erase(cache.groups.at(id)->uniqueTitle);
 		[[maybe_unused]] const bool eraseGroup = cache.groups.erase(id);
 		[[maybe_unused]] const bool eraseGroupSettings = cache.groupsSettings.erase(id);
 
-		assert(eraseGroupIdsByUniqueTitle && eraseGroup && eraseGroupSettings && "Cache desync");
+		assert(eraseGroup && eraseGroupSettings && "Cache desync");
 	}
 
 	///

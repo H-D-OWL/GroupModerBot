@@ -259,7 +259,7 @@ namespace gmb
 
 			std::filesystem::path newLogFileName{ logFilePath };
 			newLogFileName.replace_extension();
-			newLogFileName += "—";
+			newLogFileName += "__";
 			newLogFileName += GetTimestamp();
 			newLogFileName += ".txt";
 
