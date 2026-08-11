@@ -47,16 +47,16 @@ namespace gmb
 		struct Group
 		{
 			int64_t id{};
-			std::string title{}, uniqueTitle{};
+			std::string title{}; 
 			TgBot::Chat::Type type{};
-			bool isBotAdmin{}, isBotActive{};
+			bool isBotAdmin{}, isBotActive{}; 
 
 			auto operator<=>(const Group&) const = default;
 
 			Group() = default;
 
-			Group(int64_t id, std::string title, std::string uniqueTitle, TgBot::Chat::Type type, bool isBotAdmin, bool isBotActive)
-				: id(id), title(title), uniqueTitle(uniqueTitle), type(type), isBotAdmin(isBotAdmin), isBotActive(isBotActive) {
+			Group(int64_t id, std::string title, TgBot::Chat::Type type, bool isBotAdmin, bool isBotActive)
+				: id(id), title(title), type(type), isBotAdmin(isBotAdmin), isBotActive(isBotActive) {
 			}
 		};
 
@@ -93,7 +93,6 @@ namespace gmb
 		std::shared_ptr<const GroupSettings> GetGroupSettings(const int64_t groupId) const;
 		std::unordered_map<int64_t, std::shared_ptr<const GroupSettings>> GetGroupsSettings() const;
 
-		int64_t GroupIdFromUniqueTitle(const std::string& uniqueTitle) const;
 		bool IsBotActive(const int64_t groupId) const;
 
 		int64_t GetWarns(const int64_t userId, const int64_t groupId) const;
@@ -131,7 +130,6 @@ namespace gmb
 			std::unordered_map<int64_t, std::shared_ptr<const Admin>> admins{};
 
 			std::unordered_map<int64_t, std::shared_ptr<const Group>> groups{};
-			std::unordered_map<std::string, int64_t> groupIdsByUniqueTitle{};
 
 			std::unordered_map<int64_t, std::shared_ptr<const GroupSettings>> groupsSettings{};
 		};
@@ -164,12 +162,11 @@ namespace gmb
 		{
 			static constexpr std::string_view idColumnName = "Id";
 			static constexpr std::string_view titleColumnName = "Title";
-			static constexpr std::string_view uniqueTitleColumnName = "UniqueTitle";
 			static constexpr std::string_view typeColumnName = "Type";
 			static constexpr std::string_view isBotAdminColumnName = "IsBotAdmin";
 			static constexpr std::string_view isBotActiveColumnName = "IsBotActive";
 
-			GroupsTableName() : TableName{ "Groups", {idColumnName, titleColumnName, uniqueTitleColumnName, typeColumnName, isBotAdminColumnName, isBotActiveColumnName} } {};
+			GroupsTableName() : TableName{ "Groups", {idColumnName, titleColumnName, typeColumnName, isBotAdminColumnName, isBotActiveColumnName} } {};
 		};
 
 		struct GroupsSettingsTableName : TableName

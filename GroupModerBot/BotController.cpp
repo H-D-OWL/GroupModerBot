@@ -47,7 +47,7 @@ namespace gmb
 			constexpr std::string_view botActive{ "bot_active" };
 			constexpr std::string_view botDeactive{ "bot_deactive" };
 			constexpr std::string_view groups{ "groups" };
-			constexpr std::string_view setGroupUniqueTitle{ "set_group_unique_title" };
+			constexpr std::string_view viewGroupId{ "view_group_id" };
 			constexpr std::string_view admins{ "admins" };
 			constexpr std::string_view addAdmin{ "add_admin" };
 			constexpr std::string_view removeAdmin{ "remove_admin" };
@@ -93,10 +93,10 @@ namespace gmb
 			constexpr const char* botIsNotActive{ "the bot is inactive" };
 		}
 
-		inline std::string GroupWithUniqueTitleNotFound(const std::string_view uniqueTitle)
+		inline std::string GroupWithIdNotFound(const int64_t groupId)
 		{
-			std::string text{ "group with uniqueTitle = \"" };
-			text += uniqueTitle;
+			std::string text{ "group with id = \"" };
+			text += std::to_string(groupId);
 			text += "\" not found";
 
 			return text;
@@ -136,7 +136,7 @@ namespace gmb
 		AddBotCommand(std::string(command::botDeactive), &BotController::OnBotDeactive);
 
 		AddBotCommand(std::string(command::groups), &BotController::OnGroups);
-		AddBotCommand(std::string(command::setGroupUniqueTitle), &BotController::OnSetGroupUniqueTitle);
+		AddBotCommand(std::string(command::viewGroupId), &BotController::OnViewGroupId);
 
 		AddBotCommand(std::string(command::admins), &BotController::OnAdmins);
 		AddBotCommand(std::string(command::addAdmin), &BotController::OnAddAdmin);
@@ -185,7 +185,7 @@ namespace gmb
 
 		executor.wait_for_all();
 	}
-
+	
 	logging::OnEventResult BotController::OnStart(TgBot::Message::Ptr message)
 	{
 		if (message->chat->type != TgBot::Chat::Type::Private) return { log::nonPrivateChat };
@@ -204,11 +204,10 @@ In a private chat:
 
 Group Settings
 /groups - List all groups containing the bot
-/set_group_unique_title - Change the uniqueTitle for a group
 
 Managing Bot Administrators
 /admins - List all bot administrators
-/add_admin - Generate an AdminConfirmationCode.
+/add_admin - Generate an AdminConfirmationCode
 /remove_admin - Remove an admin using their ID
 
 Warning Settings
@@ -216,6 +215,8 @@ Warning Settings
 /set_warn_ban_settings - Set the number of warnings before banning a group member. Default: 5
 
 In a group:
+
+/view_group_id - View the group ID
 
 Bot Management
 /bot_active - Activates the bot. The bot begins executing commands in the group
@@ -250,6 +251,8 @@ Warning Settings
 /set_warn_ban_settings - Set the number of warnings before banning a group member. Default: 5
 
 In a group:
+
+/view_group_id - View the group ID
 
 Managing Warnings
 /add_warn - Add the specified number of warnings to a member. Default: 1
@@ -290,70 +293,17 @@ Managing Bot Administrators
 		}
 	}
 
-	logging::OnEventResult BotController::OnBotActive(TgBot::Message::Ptr message)
+	logging::OnEventResult BotController::OnDisableBot(TgBot::Message::Ptr message)
 	{
-		if (message->chat->type == TgBot::Chat::Type::Private) return { log::privateChat };
+		if (message->chat->type != TgBot::Chat::Type::Private) return { log::nonPrivateChat };
 
-		if (botDatabase.IsBotActive(message->chat->id)) return { log::botIsActive, chat::botIsActive };
+		if (!botDatabase.IsOwner(message->from->id)) return { log::notFromOwner,chat::cannotUseCommand };
 
-		if (botDatabase.IsOwner(message->from->id))
-		{
-			const std::shared_ptr<const BotDatabase::Group> group{ botDatabase.GetGroup(message->chat->id) };
+		botWorking.store(false);
 
-			if (group == nullptr) return { log::groupNotFoundInCache,log::groupNotFoundInCache };
+		botController->botWorking.notify_all();
 
-			const std::shared_ptr<const BotDatabase::GroupSettings> groupSettings{ botDatabase.GetGroupSettings(message->chat->id) };
-
-			if (groupSettings == nullptr) return { log::groupSettingsNotFoundInCache,log::groupSettingsNotFoundInCache };
-
-			BotDatabase::Group updateGroup{ *group };
-			updateGroup.isBotActive = true;
-
-			botDatabase.UpdateGroup(updateGroup, *groupSettings);
-
-			return { "bot has been activated", "the bot has been activated" };
-		}
-		else if (botDatabase.IsAdmin(message->from->id))
-		{
-			return { log::fromAdmin,chat::cannotUseCommand };
-		}
-		else
-		{
-			return { log::fromGuest,chat::cannotUseCommand };
-		}
-	}
-
-	logging::OnEventResult BotController::OnBotDeactive(TgBot::Message::Ptr message)
-	{
-		if (message->chat->type == TgBot::Chat::Type::Private) return { log::privateChat };
-
-		if (!botDatabase.IsBotActive(message->chat->id)) return { log::botIsNotActive, chat::botIsNotActive };
-
-		if (botDatabase.IsOwner(message->from->id))
-		{
-			const std::shared_ptr<const BotDatabase::Group> group{ botDatabase.GetGroup(message->chat->id) };
-
-			if (group == nullptr) return { log::groupNotFoundInCache,log::groupNotFoundInCache };
-
-			const std::shared_ptr<const BotDatabase::GroupSettings> groupSettings{ botDatabase.GetGroupSettings(message->chat->id) };
-
-			if (groupSettings == nullptr) return { log::groupSettingsNotFoundInCache,log::groupSettingsNotFoundInCache };
-
-			BotDatabase::Group updateGroup{ *group };
-			updateGroup.isBotActive = false;
-
-			botDatabase.UpdateGroup(updateGroup, *groupSettings);
-
-			return { "bot has been deactivated", "the bot has been deactivated" };
-		}
-		else if (botDatabase.IsAdmin(message->from->id))
-		{
-			return { log::fromAdmin,chat::cannotUseCommand };
-		}
-		else
-		{
-			return { log::fromGuest,chat::cannotUseCommand };
-		}
+		return { "", "the bot has stopped working" };
 	}
 
 	logging::OnEventResult BotController::OnGroups(TgBot::Message::Ptr message)
@@ -368,7 +318,7 @@ Managing Bot Administrators
 
 		for (const auto& [id, groupFromCache] : botDatabase.GetGroups())
 		{
-			sendMessageText += std::format("{}. {} ({}):\n    IsBotAdmin: {}\n    IsBotActive: {}\n    ", groupNumber, groupFromCache->title, groupFromCache->uniqueTitle,
+			sendMessageText += std::format("{}. {} ({}):\n    IsBotAdmin: {}\n    IsBotActive: {}\n    ", groupNumber, groupFromCache->title, groupFromCache->id,
 				groupFromCache->isBotAdmin ? "Yes" : "No",
 				groupFromCache->isBotActive ? "Yes" : "No");
 
@@ -390,42 +340,6 @@ Managing Bot Administrators
 		}
 
 		return { "list of groups has been viewed", sendMessageText };
-	}
-
-	logging::OnEventResult BotController::OnSetGroupUniqueTitle(TgBot::Message::Ptr message)
-	{
-		if (message->chat->type != TgBot::Chat::Type::Private) return { log::nonPrivateChat };
-
-		if (!botDatabase.IsOwner(message->from->id)) return { log::notFromOwner,chat::cannotUseCommand };
-
-		std::stringstream commandParameters(message->text.substr(command::setGroupUniqueTitle.size() + 1));
-
-		std::string oldUniqueTitle{}, newUniqueTitle{};
-
-		if (!(commandParameters >> oldUniqueTitle >> newUniqueTitle)) return { log::invalidCommandParameters,chat::invalidCommandParameters };
-
-		static constexpr size_t maxLengthUniqueTitle{ 32 };
-
-		if (newUniqueTitle.length() > maxLengthUniqueTitle) return { log::invalidCommandParameters,chat::invalidCommandParameters };
-
-		if (!std::all_of(newUniqueTitle.begin(), newUniqueTitle.end(), [](unsigned char c) { return isalnum(c) || c == '_'; })) return { log::invalidCommandParameters,chat::invalidCommandParameters };
-
-		if (!botDatabase.GetGroups().contains(botDatabase.GroupIdFromUniqueTitle(oldUniqueTitle))) return { GroupWithUniqueTitleNotFound(oldUniqueTitle), GroupWithUniqueTitleNotFound(oldUniqueTitle) };
-
-		const std::shared_ptr<const BotDatabase::Group> group{ botDatabase.GetGroup(botDatabase.GroupIdFromUniqueTitle(oldUniqueTitle)) };
-
-		if (group == nullptr) return { log::groupNotFoundInCache,log::groupNotFoundInCache };
-
-		const std::shared_ptr<const BotDatabase::GroupSettings> groupSettings{ botDatabase.GetGroupSettings(group->id) };
-
-		if (groupSettings == nullptr) return { log::groupSettingsNotFoundInCache,log::groupSettingsNotFoundInCache };
-
-		BotDatabase::Group updateGroup{ *group };
-		updateGroup.uniqueTitle = newUniqueTitle;
-
-		botDatabase.UpdateGroup(updateGroup, *groupSettings);
-
-		return { std::format("unique title changed from {} to {}", oldUniqueTitle, newUniqueTitle), std::format("unique title \"{}\" changed from {} to {}", updateGroup.title, oldUniqueTitle, newUniqueTitle) };
 	}
 
 	logging::OnEventResult BotController::OnAdmins(TgBot::Message::Ptr message)
@@ -544,17 +458,17 @@ Managing Bot Administrators
 
 		std::stringstream commandParameters(message->text.substr(command::setWarnMuteSettings.size() + 1));
 
-		std::string uniqueTitle{};
+		int64_t groupId{};
 
 		int64_t numWarnToMute{};
 
-		if (!(commandParameters >> uniqueTitle >> numWarnToMute)) return { log::invalidCommandParameters,chat::invalidCommandParameters };
+		if (!(commandParameters >> groupId >> numWarnToMute)) return { log::invalidCommandParameters,chat::invalidCommandParameters };
 
 		if (numWarnToMute < 0) return { log::invalidCommandParameters,chat::invalidCommandParameters };
 
-		if (!botDatabase.GetGroups().contains(botDatabase.GroupIdFromUniqueTitle(uniqueTitle))) return { GroupWithUniqueTitleNotFound(uniqueTitle), GroupWithUniqueTitleNotFound(uniqueTitle) };
+		if (!botDatabase.GetGroups().contains(groupId)) return { GroupWithIdNotFound(groupId), GroupWithIdNotFound(groupId) };
 
-		const std::shared_ptr<const BotDatabase::Group> group{ botDatabase.GetGroup(botDatabase.GroupIdFromUniqueTitle(uniqueTitle)) };
+		const std::shared_ptr<const BotDatabase::Group> group{ botDatabase.GetGroup(groupId) };
 
 		if (group == nullptr) return { log::groupNotFoundInCache,log::groupNotFoundInCache };
 
@@ -578,17 +492,17 @@ Managing Bot Administrators
 
 		std::stringstream commandParameters(message->text.substr(command::setWarnBanSettings.size() + 1));
 
-		std::string uniqueTitle{};
+		int64_t groupId{};
 
 		int64_t numWarnToBan{};
 
-		if (!(commandParameters >> uniqueTitle >> numWarnToBan)) return { log::invalidCommandParameters,chat::invalidCommandParameters };
+		if (!(commandParameters >> groupId >> numWarnToBan)) return { log::invalidCommandParameters,chat::invalidCommandParameters };
 
 		if (numWarnToBan < 0) return { log::invalidCommandParameters,chat::invalidCommandParameters };
 
-		if (!botDatabase.GetGroups().contains(botDatabase.GroupIdFromUniqueTitle(uniqueTitle))) return { GroupWithUniqueTitleNotFound(uniqueTitle), GroupWithUniqueTitleNotFound(uniqueTitle) };
+		if (!botDatabase.GetGroups().contains(groupId)) return { GroupWithIdNotFound(groupId), GroupWithIdNotFound(groupId) };
 
-		const std::shared_ptr<const BotDatabase::Group> group{ botDatabase.GetGroup(botDatabase.GroupIdFromUniqueTitle(uniqueTitle)) };
+		const std::shared_ptr<const BotDatabase::Group> group{ botDatabase.GetGroup(groupId) };
 
 		if (group == nullptr) return { log::groupNotFoundInCache,log::groupNotFoundInCache };
 
@@ -602,6 +516,83 @@ Managing Bot Administrators
 		botDatabase.UpdateGroup(*group, updateGroupSettings);
 
 		return { std::format("warn ban settings changed: {}", updateGroupSettings.numWarnToBan), std::format("{}: warn ban settings changed: {}", group->title, updateGroupSettings.numWarnToBan) };
+	}
+
+	logging::OnEventResult BotController::OnViewGroupId(TgBot::Message::Ptr message)
+	{
+		if (message->chat->type == TgBot::Chat::Type::Private) return { log::privateChat };
+
+		if (!botDatabase.IsBotActive(message->chat->id)) return { log::botIsNotActive, chat::botIsNotActive };
+
+		if (!botDatabase.IsAdmin(message->from->id)) return { log::fromGuest,chat::cannotUseCommand };
+
+		return { "group ID has been viewed", std::format("Group ID = {}", message->chat->id) };
+	}
+
+	logging::OnEventResult BotController::OnBotActive(TgBot::Message::Ptr message)
+	{
+		if (message->chat->type == TgBot::Chat::Type::Private) return { log::privateChat };
+
+		if (botDatabase.IsBotActive(message->chat->id)) return { log::botIsActive, chat::botIsActive };
+
+		if (botDatabase.IsOwner(message->from->id))
+		{
+			const std::shared_ptr<const BotDatabase::Group> group{ botDatabase.GetGroup(message->chat->id) };
+
+			if (group == nullptr) return { log::groupNotFoundInCache,log::groupNotFoundInCache };
+
+			const std::shared_ptr<const BotDatabase::GroupSettings> groupSettings{ botDatabase.GetGroupSettings(message->chat->id) };
+
+			if (groupSettings == nullptr) return { log::groupSettingsNotFoundInCache,log::groupSettingsNotFoundInCache };
+
+			BotDatabase::Group updateGroup{ *group };
+			updateGroup.isBotActive = true;
+
+			botDatabase.UpdateGroup(updateGroup, *groupSettings);
+
+			return { "bot has been activated", "the bot has been activated" };
+		}
+		else if (botDatabase.IsAdmin(message->from->id))
+		{
+			return { log::fromAdmin,chat::cannotUseCommand };
+		}
+		else
+		{
+			return { log::fromGuest,chat::cannotUseCommand };
+		}
+	}
+
+	logging::OnEventResult BotController::OnBotDeactive(TgBot::Message::Ptr message)
+	{
+		if (message->chat->type == TgBot::Chat::Type::Private) return { log::privateChat };
+
+		if (!botDatabase.IsBotActive(message->chat->id)) return { log::botIsNotActive, chat::botIsNotActive };
+
+		if (botDatabase.IsOwner(message->from->id))
+		{
+			const std::shared_ptr<const BotDatabase::Group> group{ botDatabase.GetGroup(message->chat->id) };
+
+			if (group == nullptr) return { log::groupNotFoundInCache,log::groupNotFoundInCache };
+
+			const std::shared_ptr<const BotDatabase::GroupSettings> groupSettings{ botDatabase.GetGroupSettings(message->chat->id) };
+
+			if (groupSettings == nullptr) return { log::groupSettingsNotFoundInCache,log::groupSettingsNotFoundInCache };
+
+			BotDatabase::Group updateGroup{ *group };
+			updateGroup.isBotActive = false;
+
+			botDatabase.UpdateGroup(updateGroup, *groupSettings);
+
+			return { "bot has been deactivated", "the bot has been deactivated" };
+		}
+		else if (botDatabase.IsAdmin(message->from->id))
+		{
+			return { log::fromAdmin,chat::cannotUseCommand };
+		}
+		else
+		{
+			return { log::fromGuest,chat::cannotUseCommand };
+		}
 	}
 
 	logging::OnEventResult BotController::OnSetWarn(TgBot::Message::Ptr message)
@@ -768,19 +759,6 @@ Managing Bot Administrators
 		return { std::format("Warnings: {}", quantityWarns),  std::format("has {} warnings", quantityWarns) };
 	}
 
-	logging::OnEventResult BotController::OnDisableBot(TgBot::Message::Ptr message)
-	{
-		if (message->chat->type != TgBot::Chat::Type::Private) return { log::nonPrivateChat };
-
-		if (!botDatabase.IsOwner(message->from->id)) return { log::notFromOwner,chat::cannotUseCommand };
-
-		botWorking.store(false);
-
-		botController->botWorking.notify_all();
-
-		return { "", "the bot has stopped working" };
-	}
-
 	logging::OnEventResult BotController::OnMyChatMember(TgBot::ChatMemberUpdated::Ptr update)
 	{
 		const bool containsGroup{ botDatabase.GetGroups().contains(update->chat->id) };
@@ -788,13 +766,11 @@ Managing Bot Administrators
 
 		if (!containsGroup && (status == "member" || status == "administrator"))
 		{
-			static constexpr size_t lengthGeneratedUniqueTitle{ 32 };
 			static constexpr int64_t startingNumWarnToMute{ 3 }, startingNumWarnToBan{ 5 };
 
 			botDatabase.AddGroup(BotDatabase::Group{
 			update->chat->id,
 			update->chat->title,
-			RandomNumberGenerator(lengthGeneratedUniqueTitle),
 			update->chat->type,
 			status == "administrator",
 			false },
@@ -843,7 +819,7 @@ Managing Bot Administrators
 			{ command::botActive, "Activates the bot. The bot begins executing commands in the group" },
 			{ command::botDeactive, "Deactivate the bot. The bot stops executing commands in the group" },
 			{ command::groups, "List all groups containing the bot" },
-			{ command::setGroupUniqueTitle, "Change the uniqueTitle for a group" },
+			{ command::viewGroupId, "View the group ID" },
 			{ command::admins, "List all bot administrators" },
 			{ command::addAdmin, "Owner: Generate an AdminConfirmationCode. Guest: Become the owner (if none exists) or an admin by entering the confirmation code" },
 			{ command::removeAdmin, "Remove an admin using their ID" },

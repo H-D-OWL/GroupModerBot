@@ -50,12 +50,9 @@ namespace gmb
 	private:
 
 		logging::OnEventResult OnStart(TgBot::Message::Ptr message);
-
-		logging::OnEventResult OnBotActive(TgBot::Message::Ptr message);
-		logging::OnEventResult OnBotDeactive(TgBot::Message::Ptr message);
+		logging::OnEventResult OnDisableBot(TgBot::Message::Ptr message);
 
 		logging::OnEventResult OnGroups(TgBot::Message::Ptr message);
-		logging::OnEventResult OnSetGroupUniqueTitle(TgBot::Message::Ptr message);
 
 		logging::OnEventResult OnAdmins(TgBot::Message::Ptr message);
 		logging::OnEventResult OnAddAdmin(TgBot::Message::Ptr message);
@@ -64,15 +61,18 @@ namespace gmb
 		logging::OnEventResult OnSetWarnMuteSettings(TgBot::Message::Ptr message);
 		logging::OnEventResult OnSetWarnBanSettings(TgBot::Message::Ptr message);
 
+		logging::OnEventResult OnViewGroupId(TgBot::Message::Ptr message);
+
+		logging::OnEventResult OnBotActive(TgBot::Message::Ptr message);
+		logging::OnEventResult OnBotDeactive(TgBot::Message::Ptr message);
+
 		logging::OnEventResult OnSetWarn(TgBot::Message::Ptr message);
 		logging::OnEventResult OnViewWarn(TgBot::Message::Ptr message);
-
-		logging::OnEventResult OnDisableBot(TgBot::Message::Ptr message);
 
 		logging::OnEventResult OnMyChatMember(TgBot::ChatMemberUpdated::Ptr update);
 
 		//Adds a command to the Telegram UI and a command handler.
-		template<typename Func>
+		template<class Func>
 		void AddBotCommand(std::string commandName, const Func func)
 		{
 			bot.getEvents().onCommand(commandName,
@@ -124,7 +124,7 @@ namespace gmb
 		}
 
 		//Provides protection against any exceptions. Logs any exceptions that occur or the correct execution of code.
-		template<typename Func>
+		template<class Func>
 		void SafeExecute(const logging::LogSource logSource, const logging::LogType logType, const logging::ContextLog& contextLog, const Func func, const bool isLoggingOnly = false) noexcept
 		{
 			const auto SafelySendMessage = [this, isLoggingOnly](const std::string& id, const std::string& textMessage) noexcept

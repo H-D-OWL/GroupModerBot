@@ -47,7 +47,7 @@ set(SOURCE_FILES
     "${PROJECT_NAME}/ConfigManager.cpp"
 )
 
-add_executable("${PROJECT_NAME}" ${SOURCE_FILES} )
+add_executable("${PROJECT_NAME}" ${SOURCE_FILES})
 
 # ---------------------------------------------------------
 # COMPILATION AND OPTIMIZATION
@@ -119,12 +119,12 @@ set(CONFIG_SOURCE_DEBUG "${CMAKE_CURRENT_SOURCE_DIR}/${CONFIG_FILE_NAME}")
 
 # Blank release template text
 set(CONFIG_CONTENT_RELEASE 
-"DbPath=						
-BotToken=						
+"DbPath=				
+BotToken=			
 EnableProcessPendingUpdates=	true
 LogMode=                        ConsoleAndFile
-MaxLogFileSize=					
-LogDirectory=					"
+MaxLogFileSize=			
+LogDirectory=			"
 )
 
 # Universal path to a binary file 
